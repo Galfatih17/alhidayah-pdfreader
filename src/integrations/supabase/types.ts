@@ -14,7 +14,133 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      bookmarks: {
+        Row: {
+          created_at: string
+          device_id: string
+          id: string
+          note: string | null
+          page_number: number
+          pdf_id: string
+          title: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          device_id?: string
+          id?: string
+          note?: string | null
+          page_number: number
+          pdf_id: string
+          title?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          device_id?: string
+          id?: string
+          note?: string | null
+          page_number?: number
+          pdf_id?: string
+          title?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bookmarks_pdf_id_fkey"
+            columns: ["pdf_id"]
+            isOneToOne: false
+            referencedRelation: "pdf_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pdf_documents: {
+        Row: {
+          created_at: string
+          description: string | null
+          file_path: string
+          file_size: number | null
+          id: string
+          thumbnail_path: string | null
+          title: string
+          total_pages: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          file_path: string
+          file_size?: number | null
+          id?: string
+          thumbnail_path?: string | null
+          title: string
+          total_pages?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          file_path?: string
+          file_size?: number | null
+          id?: string
+          thumbnail_path?: string | null
+          title?: string
+          total_pages?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      reading_progress: {
+        Row: {
+          created_at: string
+          current_page: number
+          device_id: string
+          id: string
+          last_read_at: string
+          pdf_id: string
+          progress_percentage: number
+          total_pages: number | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          current_page?: number
+          device_id?: string
+          id?: string
+          last_read_at?: string
+          pdf_id: string
+          progress_percentage?: number
+          total_pages?: number | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          current_page?: number
+          device_id?: string
+          id?: string
+          last_read_at?: string
+          pdf_id?: string
+          progress_percentage?: number
+          total_pages?: number | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reading_progress_pdf_id_fkey"
+            columns: ["pdf_id"]
+            isOneToOne: false
+            referencedRelation: "pdf_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
