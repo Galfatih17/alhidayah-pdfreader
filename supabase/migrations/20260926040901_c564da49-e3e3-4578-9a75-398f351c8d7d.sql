@@ -1,0 +1,4 @@
+CREATE POLICY "pdf files readable" ON storage.objects FOR SELECT TO anon, authenticated USING (bucket_id IN ('pdf-files','pdf-thumbnails'));
+CREATE POLICY "pdf files insertable" ON storage.objects FOR INSERT TO anon, authenticated WITH CHECK (bucket_id IN ('pdf-files','pdf-thumbnails'));
+CREATE POLICY "pdf files updatable" ON storage.objects FOR UPDATE TO anon, authenticated USING (bucket_id IN ('pdf-files','pdf-thumbnails')) WITH CHECK (bucket_id IN ('pdf-files','pdf-thumbnails'));
+CREATE POLICY "pdf files deletable" ON storage.objects FOR DELETE TO anon, authenticated USING (bucket_id IN ('pdf-files','pdf-thumbnails'));
