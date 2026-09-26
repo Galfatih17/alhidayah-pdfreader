@@ -1,24 +1,43 @@
+import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { AppHeader } from "@/components/AppHeader";
+import { BottomNavigation } from "@/components/BottomNavigation";
+import { MainTabs } from "@/components/MainTabs";
+import { SearchBar } from "@/components/SearchBar";
+import { useDebouncedValue } from "@/lib/useDebouncedValue";
 
-// No head() here: the home route inherits title/description/og/twitter from
-// __root.tsx, and ships no og:image so serve-time hosting can inject the
-// project's social preview (explicit og:image or latest screenshot).
 export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [
+      { title: "PDF Reader — Baca & Lanjutkan Dokumen" },
+      {
+        name: "description",
+        content:
+          "Baca dokumen PDF di ponsel, lanjutkan dari halaman terakhir, dan simpan bookmark halaman penting.",
+      },
+      { property: "og:title", content: "PDF Reader — Baca & Lanjutkan Dokumen" },
+      {
+        property: "og:description",
+        content:
+          "Baca dokumen PDF di ponsel, lanjutkan dari halaman terakhir, dan simpan bookmark halaman penting.",
+      },
+    ],
+  }),
   component: Index,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
 function Index() {
+  const [query, setQuery] = useState("");
+  const debounced = useDebouncedValue(query, 250);
+
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
+    <div className="app-shell min-h-screen">
+      <AppHeader subtitle="Lanjutkan membaca" />
+      <main className="mx-auto max-w-3xl space-y-5 px-4 py-5">
+        <SearchBar value={query} onChange={setQuery} />
+        <MainTabs query={debounced} />
+      </main>
+      <BottomNavigation />
     </div>
   );
 }
