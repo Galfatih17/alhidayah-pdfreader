@@ -15,7 +15,7 @@ const PdfReader = lazy(() =>
 );
 
 const searchSchema = z.object({
-  page: fallback(z.number().int().optional(), undefined).default(undefined),
+  page: fallback(z.number().int(), 0).default(0),
 });
 
 export const Route = createFileRoute("/reader/$id")({
