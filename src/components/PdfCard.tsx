@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { DocumentThumbnail } from "./DocumentThumbnail";
 import { Button } from "@/components/ui/button";
+import { OfflineDownloadButton } from "./OfflineDownloadButton";
 import { formatFileSize } from "@/lib/format";
 import type { PdfDocument } from "@/services/types";
 
@@ -26,11 +27,14 @@ export function PdfCard({ document }: { document: PdfDocument }) {
           {meta.length ? (
             <p className="text-xs text-muted-foreground">{meta.join(" · ")}</p>
           ) : null}
-          <Button asChild size="sm" className="mt-1 rounded-lg">
-            <Link to="/reader/$id" params={{ id: document.id }}>
-              Buka
-            </Link>
-          </Button>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <Button asChild size="sm" className="rounded-lg">
+              <Link to="/reader/$id" params={{ id: document.id }}>
+                Buka
+              </Link>
+            </Button>
+            <OfflineDownloadButton filePath={document.file_path} />
+          </div>
         </div>
       </div>
     </article>
