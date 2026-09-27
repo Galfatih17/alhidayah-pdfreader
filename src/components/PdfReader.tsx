@@ -76,7 +76,7 @@ export function PdfReader({
     const element = containerRef.current;
     if (!element) return;
     const observer = new ResizeObserver(([entry]) => {
-      setContainerWidth(entry.contentRect.width);
+      if (entry) setContainerWidth(entry.contentRect.width);
     });
     observer.observe(element);
     return () => observer.disconnect();
@@ -188,7 +188,7 @@ export function PdfReader({
           >
             <Page
               pageNumber={page}
-              width={pageWidth}
+              {...(pageWidth !== undefined ? { width: pageWidth } : {})}
               renderAnnotationLayer={false}
               renderTextLayer
               onRenderError={() => setRenderError("render")}

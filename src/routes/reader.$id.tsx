@@ -74,7 +74,10 @@ function ReaderPage() {
 
   return (
     <Suspense fallback={<ReaderLoading />}>
-      <PdfReader document={document} initialPage={clampedPage} />
+      <PdfReader
+        document={document}
+        {...(clampedPage !== undefined ? { initialPage: clampedPage } : {})}
+      />
     </Suspense>
   );
 }
