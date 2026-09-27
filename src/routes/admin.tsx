@@ -1,4 +1,6 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import { Lock } from "lucide-react";
+import { verifyUploadPassword } from "@/lib/admin.functions";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2, Upload } from "lucide-react";
@@ -29,7 +31,69 @@ export const Route = createFileRoute("/admin")({
   component: AdminPage,
 });
 
+const PW_KEY = "upload-password";
+
 function AdminPage() {
+  const [password, setPassword] = useState<string | null>(null);
+  useEffect(() => {
+    setPassword(sessionStorage.getItem(PW_KEY));
+  }, []);
+  if (!password)
+    return (
+      <PasswordGate
+        onUnlock={(pw) => {
+          sessionStorage.setItem(PW_KEY, pw);
+          setPassword(pw);
+        }}
+      />
+    );
+  return <AdminContent password={password} />;
+}
+
+function PasswordGate({ onUnlock }: { onUnlock: (pw: string) => void }) {
+  const [value, setValue] = useState("");
+  const [busy, setBusy] = useState(false);
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const res = await verifyUploadPassword({ data: { password: value } });
+      if (res.ok) onUnlock(value);
+      else toast.error("Password salah.");
+    } catch {
+      toast.error("Gagal memeriksa password.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="app-shell min-h-screen">
+      <AppHeader subtitle="Khusus pemilik" />
+      <main className="mx-auto max-w-sm px-4 py-10">
+        <form onSubmit={submit} className="card-surface space-y-4 p-5">
+          <div className="flex items-center gap-2">
+            <Lock className="size-4 text-primary" />
+            <h2 className="font-display text-base font-semibold">Masukkan password</h2>
+          </div>
+          <Input
+            type="password"
+            inputMode="numeric"
+            autoComplete="current-password"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="Password unggah"
+          />
+          <Button type="submit" disabled={busy || !value} className="w-full">
+            {busy ? "Memeriksa..." : "Masuk"}
+          </Button>
+        </form>
+      </main>
+      <BottomNavigation />
+    </div>
+  );
+}
+
+function AdminContent({ password }: { password: string }) {
   const queryClient = useQueryClient();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -42,7 +106,7 @@ function AdminPage() {
   });
 
   const uploadMutation = useMutation({
-    mutationFn: () => uploadDocument({ title, description, file: file!, thumbnail }),
+    mutationFn: () => uploadDocument({ password, title, description, file: file!, thumbnail }),
     onSuccess: () => {
       toast.success("Dokumen berhasil ditambahkan.");
       setTitle("");
@@ -55,14 +119,14 @@ function AdminPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (doc: PdfDocument) => deleteDocument(doc),
+    mutationFn: (doc: PdfDocument) => deleteDocument(doc, password),
     onSuccess: () => {
       toast.success("Dokumen dihapus.");
       queryClient.invalidateQueries({ queryKey: ["pdf-documents"] });
       queryClient.invalidateQueries({ queryKey: ["recent-documents"] });
       queryClient.invalidateQueries({ queryKey: ["bookmarks"] });
     },
-    onError: () => toast.error("Dokumen gagal dihapus."),
+    onError: (e: Error) => toast.error(e.message || "Dokumen gagal dihapus."),
   });
 
   const submit = (event: FormEvent) => {
