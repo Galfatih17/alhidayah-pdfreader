@@ -33,58 +33,49 @@ export async function updateTotalPages(id: string, totalPages: number): Promise<
 }
 
 export type UploadDocumentInput = {
+  password: string;
   title: string;
   description?: string;
   file: File;
   thumbnail?: File | null;
 };
 
-export async function uploadDocument(input: UploadDocumentInput): Promise<PdfDocument> {
-  const documentId = crypto.randomUUID();
-  const safeName = input.file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const filePath = `${documentId}/${safeName}`;
-
-  const { error: uploadError } = await supabase.storage
+export async function uploadDocument(input: UploadDocumentInput): Promise<void> {
+  const { createUploadUrls, finalizeUpload } = await import("@/lib/admin.functions");
+  const urls = await createUploadUrls({
+    data: {
+      password: input.password,
+      fileName: input.file.name,
+      thumbName: input.thumbnail?.name ?? null,
+    },
+  });
+  const up = await supabase.storage
     .from(PDF_BUCKET)
-    .upload(filePath, input.file, { contentType: "application/pdf", upsert: false });
-  if (uploadError) throw new Error(uploadError.message);
+    .uploadToSignedUrl(urls.filePath, urls.token, input.file, { contentType: "application/pdf" });
+  if (up.error) throw new Error(up.error.message);
 
   let thumbnailPath: string | null = null;
-  if (input.thumbnail) {
-    const thumbName = input.thumbnail.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const path = `${documentId}/${thumbName}`;
-    const { error: thumbError } = await supabase.storage
+  if (input.thumbnail && urls.thumb) {
+    const t = await supabase.storage
       .from(THUMBNAIL_BUCKET)
-      .upload(path, input.thumbnail, { upsert: false });
-    if (!thumbError) thumbnailPath = path;
+      .uploadToSignedUrl(urls.thumb.path, urls.thumb.token, input.thumbnail);
+    if (!t.error) thumbnailPath = urls.thumb.path;
   }
 
-  const { data, error } = await supabase
-    .from("pdf_documents")
-    .insert({
-      id: documentId,
+  await finalizeUpload({
+    data: {
+      password: input.password,
+      documentId: urls.documentId,
       title: input.title,
-      description: input.description?.trim() || null,
-      file_path: filePath,
-      thumbnail_path: thumbnailPath,
-      file_size: input.file.size,
-    })
-    .select("*")
-    .single();
-
-  if (error) {
-    await supabase.storage.from(PDF_BUCKET).remove([filePath]);
-    throw new Error(error.message);
-  }
-
-  return data as PdfDocument;
+      description: input.description ?? null,
+      filePath: urls.filePath,
+      thumbnailPath,
+      fileSize: input.file.size,
+    },
+  });
 }
 
-export async function deleteDocument(doc: PdfDocument): Promise<void> {
-  const { error } = await supabase.from("pdf_documents").delete().eq("id", doc.id);
-  if (error) throw new Error(error.message);
-  await supabase.storage.from(PDF_BUCKET).remove([doc.file_path]);
-  if (doc.thumbnail_path) {
-    await supabase.storage.from(THUMBNAIL_BUCKET).remove([doc.thumbnail_path]);
-  }
+export async function deleteDocument(doc: PdfDocument, password: string): Promise<void> {
+  const { deleteDocumentAdmin } = await import("@/lib/admin.functions");
+  await deleteDocumentAdmin({ data: { password, id: doc.id } });
 }
