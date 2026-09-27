@@ -4,7 +4,6 @@ import { Document, Page, pdfjs } from "react-pdf";
 import { FileWarning, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import "react-pdf/dist/Page/AnnotationLayer.css";
-import "react-pdf/dist/Page/TextLayer.css";
 
 import { PageNavigation } from "./PageNavigation";
 import { PdfToolbar } from "./PdfToolbar";
@@ -19,6 +18,15 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.min.mjs",
   import.meta.url,
 ).toString();
+
+// Faster loading: stream by range requests, cap pixel ratio for quicker rendering on phones.
+const PDF_OPTIONS = {
+  disableAutoFetch: true,
+  disableStream: false,
+  isEvalSupported: false,
+};
+const RENDER_DPR =
+  typeof window !== "undefined" ? Math.min(window.devicePixelRatio || 1, 2) : 1;
 
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 3;
@@ -179,6 +187,7 @@ export function PdfReader({
           <Document
             key={reloadKey}
             file={fileUrl}
+            options={PDF_OPTIONS}
             onLoadSuccess={onLoadSuccess}
             onLoadError={() => setRenderError("load")}
             onSourceError={() => setRenderError("source")}
@@ -190,7 +199,8 @@ export function PdfReader({
               pageNumber={page}
               {...(pageWidth !== undefined ? { width: pageWidth } : {})}
               renderAnnotationLayer={false}
-              renderTextLayer
+              renderTextLayer={false}
+              devicePixelRatio={RENDER_DPR}
               onRenderError={() => setRenderError("render")}
               loading={
                 <div className="grid h-[70vh] w-full place-items-center">
@@ -198,6 +208,17 @@ export function PdfReader({
                 </div>
               }
             />
+            {numPages > page ? (
+              <div className="hidden" aria-hidden>
+                <Page
+                  pageNumber={page + 1}
+                  {...(pageWidth !== undefined ? { width: pageWidth } : {})}
+                  renderAnnotationLayer={false}
+                  renderTextLayer={false}
+                  devicePixelRatio={RENDER_DPR}
+                />
+              </div>
+            ) : null}
           </Document>
         )}
       </div>

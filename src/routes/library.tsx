@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Library as LibraryIcon } from "lucide-react";
+import { Download, Library as LibraryIcon, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { pdfStorageService } from "@/services/pdfStorageService";
 import { AppHeader } from "@/components/AppHeader";
 import { BottomNavigation } from "@/components/BottomNavigation";
 import { EmptyState } from "@/components/EmptyState";
@@ -39,6 +41,23 @@ function LibraryPage() {
     queryFn: listDocuments,
   });
 
+  const [downloading, setDownloading] = useState(false);
+  const downloadAll = async () => {
+    if (!data?.length) return;
+    setDownloading(true);
+    let failed = 0;
+    for (const doc of data) {
+      try {
+        await pdfStorageService.downloadPdf(doc.file_path);
+      } catch {
+        failed++;
+      }
+    }
+    setDownloading(false);
+    if (failed) toast.error(`${failed} dokumen gagal diunduh.`);
+    else toast.success("Semua PDF tersimpan untuk dibaca offline.");
+  };
+
   const term = debounced.trim().toLowerCase();
   const filtered = (data ?? []).filter((doc) =>
     term ? `${doc.title} ${doc.description ?? ""}`.toLowerCase().includes(term) : true,
@@ -50,6 +69,17 @@ function LibraryPage() {
       <AppHeader subtitle="Semua dokumen" />
       <main className="mx-auto max-w-3xl space-y-5 px-4 py-5">
         <SearchBar value={query} onChange={setQuery} />
+        {data?.length ? (
+          <Button
+            variant="outline"
+            className="w-full gap-2"
+            disabled={downloading}
+            onClick={downloadAll}
+          >
+            {downloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+            {downloading ? "Mengunduh semua PDF..." : "Unduh semua untuk offline"}
+          </Button>
+        ) : null}
 
         {isLoading ? (
           <div className="space-y-3">
