@@ -1,3 +1,4 @@
+import { META_STORE, PDF_STORE, idbDelete, idbGet, idbKeys, idbPut } from "@/lib/offlineDb";
 import { supabase } from "@/integrations/supabase/client";
 
 export const PDF_BUCKET = "pdf-files";
@@ -25,28 +26,78 @@ export interface PdfStorageService {
   getThumbnail(thumbnailPath?: string | null): Promise<string | null>;
 }
 
-class RemotePdfStorageService implements PdfStorageService {
-  async getPdf(filePath: string): Promise<string> {
+const objectUrls = new Map<string, string>();
+const inflight = new Map<string, Promise<void>>();
+const listeners = new Set<() => void>();
+
+export function subscribeOffline(fn: () => void) {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+const notify = () => listeners.forEach((l) => l());
+
+class OfflinePdfStorageService implements PdfStorageService {
+  private async signedUrl(filePath: string) {
     const { data, error } = await supabase.storage
       .from(PDF_BUCKET)
       .createSignedUrl(filePath, SIGNED_URL_TTL_SECONDS);
-
     if (error || !data?.signedUrl) {
       throw new Error(error?.message ?? "PDF tidak ditemukan di penyimpanan.");
     }
     return data.signedUrl;
   }
 
-  async downloadPdf(): Promise<void> {
-    // Stage 2: store the blob in IndexedDB.
+  /** Returns a local blob URL when downloaded, else a remote URL and caches in background. */
+  async getPdf(filePath: string): Promise<string> {
+    const cached = objectUrls.get(filePath);
+    if (cached) return cached;
+    try {
+      const blob = await idbGet<Blob>(PDF_STORE, filePath);
+      if (blob) {
+        const url = URL.createObjectURL(blob);
+        objectUrls.set(filePath, url);
+        return url;
+      }
+    } catch {
+      /* IndexedDB unavailable */
+    }
+    const url = await this.signedUrl(filePath);
+    // Save a copy for offline reading without blocking the first render.
+    void this.downloadPdf(filePath).catch(() => undefined);
+    return url;
   }
 
-  async deleteOfflinePdf(): Promise<void> {
-    // Stage 2: remove the blob from IndexedDB.
+  downloadPdf(filePath: string): Promise<void> {
+    const existing = inflight.get(filePath);
+    if (existing) return existing;
+    const job = (async () => {
+      if (await idbGet<Blob>(PDF_STORE, filePath)) return;
+      const url = await this.signedUrl(filePath);
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Gagal mengunduh PDF.");
+      const blob = await res.blob();
+      await idbPut(PDF_STORE, filePath, blob);
+      notify();
+    })().finally(() => inflight.delete(filePath));
+    inflight.set(filePath, job);
+    return job;
   }
 
-  async isAvailableOffline(): Promise<boolean> {
-    return false;
+  async deleteOfflinePdf(filePath: string): Promise<void> {
+    await idbDelete(PDF_STORE, filePath);
+    const url = objectUrls.get(filePath);
+    if (url) URL.revokeObjectURL(url);
+    objectUrls.delete(filePath);
+    notify();
+  }
+
+  async isAvailableOffline(filePath: string): Promise<boolean> {
+    try {
+      const keys = await idbKeys(PDF_STORE);
+      return keys.includes(filePath);
+    } catch {
+      return false;
+    }
   }
 
   async getThumbnail(thumbnailPath?: string | null): Promise<string | null> {
@@ -58,4 +109,20 @@ class RemotePdfStorageService implements PdfStorageService {
   }
 }
 
-export const pdfStorageService: PdfStorageService = new RemotePdfStorageService();
+export const pdfStorageService: PdfStorageService = new OfflinePdfStorageService();
+
+/** Cache document metadata so the library and reader open without internet. */
+export async function cacheMeta<T>(key: string, value: T) {
+  try {
+    await idbPut(META_STORE, key, value);
+  } catch {
+    /* ignore */
+  }
+}
+export async function readMeta<T>(key: string): Promise<T | undefined> {
+  try {
+    return await idbGet<T>(META_STORE, key);
+  } catch {
+    return undefined;
+  }
+}

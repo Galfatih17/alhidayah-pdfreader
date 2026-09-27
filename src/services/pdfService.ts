@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { PDF_BUCKET, THUMBNAIL_BUCKET } from "./pdfStorageService";
+import { PDF_BUCKET, THUMBNAIL_BUCKET, cacheMeta, readMeta } from "./pdfStorageService";
 import type { PdfDocument } from "./types";
 
 export async function listDocuments(): Promise<PdfDocument[]> {
@@ -8,8 +8,14 @@ export async function listDocuments(): Promise<PdfDocument[]> {
     .select("*")
     .order("created_at", { ascending: false });
 
-  if (error) throw new Error(error.message);
-  return (data ?? []) as PdfDocument[];
+  if (error) {
+    const cached = await readMeta<PdfDocument[]>("documents");
+    if (cached) return cached;
+    throw new Error(error.message);
+  }
+  const docs = (data ?? []) as PdfDocument[];
+  void cacheMeta("documents", docs);
+  return docs;
 }
 
 export async function getDocument(id: string): Promise<PdfDocument> {
@@ -19,8 +25,16 @@ export async function getDocument(id: string): Promise<PdfDocument> {
     .eq("id", id)
     .maybeSingle();
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    const cached = await readMeta<PdfDocument>(`doc:${id}`);
+    if (cached) return cached;
+    const list = await readMeta<PdfDocument[]>("documents");
+    const hit = list?.find((d) => d.id === id);
+    if (hit) return hit;
+    throw new Error(error.message);
+  }
   if (!data) throw new Error("Dokumen tidak ditemukan.");
+  void cacheMeta(`doc:${id}`, data);
   return data as PdfDocument;
 }
 
