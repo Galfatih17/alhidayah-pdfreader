@@ -80,13 +80,13 @@ class OfflinePdfStorageService implements PdfStorageService {
       const total = Number(res.headers.get("content-length")) || 0;
       const reader = res.body?.getReader();
       if (!reader) throw new Error("Unduhan tidak dapat dibaca.");
-      const chunks: Uint8Array[] = [];
+      const chunks: ArrayBuffer[] = [];
       let received = 0;
       onProgress?.(total ? 0 : null);
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        chunks.push(value);
+        chunks.push(Uint8Array.from(value).buffer);
         received += value.byteLength;
         onProgress?.(total ? Math.min(100, Math.round(received / total * 100)) : null);
       }

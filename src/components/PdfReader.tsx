@@ -17,7 +17,6 @@ import type { PdfDocument } from "@/services/types";
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
 
-const PDF_OPTIONS = { isEvalSupported: false };
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 3;
 const clamp = (value: number) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, value));
@@ -95,7 +94,12 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
     setPage(value);
     embla?.scrollTo(value - 1);
   };
-  const distance = (touches: React.TouchList) => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+  const distance = (touches: React.TouchList) => {
+    const first = touches.item(0);
+    const second = touches.item(1);
+    if (!first || !second) return 0;
+    return Math.hypot(first.clientX - second.clientX, first.clientY - second.clientY);
+  };
   const onTouchStart = (event: React.TouchEvent) => {
     if (event.touches.length === 2) pinchRef.current = { distance: distance(event.touches), scale };
   };
@@ -122,7 +126,7 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
             <Skeleton className="h-[65vh] w-full" />
           </div>
         ) : (
-          <Document file={fileUrl} options={PDF_OPTIONS} onLoadSuccess={onLoadSuccess} onLoadError={() => setError(true)} onSourceError={() => setError(true)} loading={<Skeleton className="h-[65vh] w-full" />} error={<div />}>
+          <Document file={fileUrl} onLoadSuccess={onLoadSuccess} onLoadError={() => setError(true)} onSourceError={() => setError(true)} loading={<Skeleton className="h-[65vh] w-full" />} error={<div />}>
             <div ref={emblaRef} className="overflow-hidden">
               <div className="flex touch-pan-y items-start">
                 {Array.from({ length: numPages }, (_, index) => (
@@ -130,7 +134,7 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
                     {Math.abs(index + 1 - page) <= 1 ? (
                       <div className="pdf-page-canvas flex min-h-[50vh] justify-center" style={{ touchAction: "pan-y" }} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={() => { pinchRef.current = null; }}>
                         <div className="origin-top transition-transform duration-150" style={{ transform: `scale(${scale})` }}>
-                          <Page pageNumber={index + 1} width={width ? Math.min(width, 900) : undefined} renderAnnotationLayer={false} renderTextLayer={false} devicePixelRatio={Math.min(window.devicePixelRatio || 1, 2)} loading={<div className="grid h-[60vh] place-items-center"><Loader2 className="size-6 animate-spin text-primary" /></div>} onRenderError={() => setError(true)} />
+                          <Page pageNumber={index + 1} {...(width ? { width: Math.min(width, 900) } : {})} renderAnnotationLayer={false} renderTextLayer={false} devicePixelRatio={Math.min(window.devicePixelRatio || 1, 2)} loading={<div className="grid h-[60vh] place-items-center"><Loader2 className="size-6 animate-spin text-primary" /></div>} onRenderError={() => setError(true)} />
                         </div>
                       </div>
                     ) : null}
