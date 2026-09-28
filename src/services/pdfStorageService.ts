@@ -15,9 +15,9 @@ const SIGNED_URL_TTL_SECONDS = 60 * 60;
  */
 export interface PdfStorageService {
   /** Resolve a URL the PDF viewer can load (remote now, local blob later). */
-  getPdf(filePath: string): Promise<string>;
+  getPdf(filePath: string, onProgress?: (percent: number | null) => void): Promise<string>;
   /** Persist the PDF for offline use. No-op in Stage 1. */
-  downloadPdf(filePath: string): Promise<void>;
+  downloadPdf(filePath: string, onProgress?: (percent: number | null) => void): Promise<void>;
   /** Remove an offline copy. No-op in Stage 1. */
   deleteOfflinePdf(filePath: string): Promise<void>;
   /** Whether the PDF is readable without a network connection. */
@@ -47,8 +47,8 @@ class OfflinePdfStorageService implements PdfStorageService {
     return data.signedUrl;
   }
 
-  /** Returns a local blob URL when downloaded, else a remote URL and caches in background. */
-  async getPdf(filePath: string): Promise<string> {
+  /** Only return a local URL after the full file has been stored. */
+  async getPdf(filePath: string, onProgress?: (percent: number | null) => void): Promise<string> {
     const cached = objectUrls.get(filePath);
     if (cached) return cached;
     try {
@@ -61,13 +61,15 @@ class OfflinePdfStorageService implements PdfStorageService {
     } catch {
       /* IndexedDB unavailable */
     }
-    const url = await this.signedUrl(filePath);
-    // Save a copy for offline reading without blocking the first render.
-    void this.downloadPdf(filePath).catch(() => undefined);
+    await this.downloadPdf(filePath, onProgress);
+    const blob = await idbGet<Blob>(PDF_STORE, filePath);
+    if (!blob) throw new Error("PDF tidak tersimpan di perangkat.");
+    const url = URL.createObjectURL(blob);
+    objectUrls.set(filePath, url);
     return url;
   }
 
-  downloadPdf(filePath: string): Promise<void> {
+  downloadPdf(filePath: string, onProgress?: (percent: number | null) => void): Promise<void> {
     const existing = inflight.get(filePath);
     if (existing) return existing;
     const job = (async () => {
@@ -75,8 +77,22 @@ class OfflinePdfStorageService implements PdfStorageService {
       const url = await this.signedUrl(filePath);
       const res = await fetch(url);
       if (!res.ok) throw new Error("Gagal mengunduh PDF.");
-      const blob = await res.blob();
+      const total = Number(res.headers.get("content-length")) || 0;
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("Unduhan tidak dapat dibaca.");
+      const chunks: Uint8Array[] = [];
+      let received = 0;
+      onProgress?.(total ? 0 : null);
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        received += value.byteLength;
+        onProgress?.(total ? Math.min(100, Math.round(received / total * 100)) : null);
+      }
+      const blob = new Blob(chunks, { type: "application/pdf" });
       await idbPut(PDF_STORE, filePath, blob);
+      onProgress?.(100);
       notify();
     })().finally(() => inflight.delete(filePath));
     inflight.set(filePath, job);
