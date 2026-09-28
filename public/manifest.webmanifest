@@ -1,13 +1,13 @@
 {
-  "name": "PDF Reader",
-  "short_name": "PDF Reader",
+  "name": "Alhidayah PDF Reader",
+  "short_name": "Alhidayah",
   "description": "Baca dokumen PDF, lanjutkan dari halaman terakhir, dan simpan bookmark.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "theme_color": "#8a4a２b",
-  "background_color": "#faf8f4",
+  "theme_color": "#FDFBF7",
+  "background_color": "#FDFBF7",
   "icons": [
     {
       "src": "/icons/icon-192.png",

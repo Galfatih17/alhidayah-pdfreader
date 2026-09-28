@@ -8,3 +8,6 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+
+- The installable offline shell uses vite-plugin-pwa generateSW and a single guarded registration wrapper; preview/dev unregister app workers to avoid stale pages.
+- PDF binaries live in IndexedDB and the reader opens local Blob URLs only after a full download; app-shell caching excludes private document URLs.

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Download, Library as LibraryIcon, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -26,6 +26,8 @@ export const Route = createFileRoute("/library")({
         property: "og:description",
         content: "Semua dokumen PDF yang tersedia untuk dibaca.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: LibraryPage,
@@ -100,12 +102,7 @@ function LibraryPage() {
             <EmptyState
               icon={LibraryIcon}
               title="Belum ada dokumen."
-              description="Tambahkan file PDF terlebih dahulu untuk mulai membaca."
-              action={
-                <Button asChild size="sm" className="mt-1">
-                  <Link to="/admin">Tambah dokumen</Link>
-                </Button>
-              }
+              description="Belum ada dokumen untuk dibaca."
             />
           )
         ) : (

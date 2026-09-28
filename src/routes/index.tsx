@@ -21,6 +21,8 @@ export const Route = createFileRoute("/")({
         content:
           "Baca dokumen PDF di ponsel, lanjutkan dari halaman terakhir, dan simpan bookmark halaman penting.",
       },
+       { property: "og:type", content: "website" },
+       { name: "twitter:card", content: "summary" },
     ],
   }),
   component: Index,
