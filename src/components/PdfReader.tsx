@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import useEmblaCarousel from "embla-carousel-react";
 import { Document, Page, pdfjs } from "react-pdf";
 import { FileWarning, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -14,221 +15,133 @@ import { updateTotalPages } from "@/services/pdfService";
 import { getProgress, saveProgress } from "@/services/readingProgressService";
 import type { PdfDocument } from "@/services/types";
 
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  "pdfjs-dist/build/pdf.worker.min.mjs",
-  import.meta.url,
-).toString();
+pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
 
-// Faster loading: stream by range requests, cap pixel ratio for quicker rendering on phones.
-const PDF_OPTIONS = {
-  disableAutoFetch: true,
-  disableStream: false,
-  isEvalSupported: false,
-};
-const RENDER_DPR =
-  typeof window !== "undefined" ? Math.min(window.devicePixelRatio || 1, 2) : 1;
-
+const PDF_OPTIONS = { isEvalSupported: false };
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 3;
-const SAVE_DEBOUNCE_MS = 1200;
+const clamp = (value: number) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, value));
 
-export function PdfReader({
-  document: doc,
-  initialPage,
-}: {
-  document: PdfDocument;
-  initialPage?: number;
-}) {
+export function PdfReader({ document: doc, initialPage }: { document: PdfDocument; initialPage?: number }) {
   const queryClient = useQueryClient();
   const containerRef = useRef<HTMLDivElement>(null);
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
+  const pinchRef = useRef<{ distance: number; scale: number } | null>(null);
   const [page, setPage] = useState(initialPage ?? 1);
   const [numPages, setNumPages] = useState(doc.total_pages ?? 0);
   const [scale, setScale] = useState(1);
-  const [fitWidth, setFitWidth] = useState(true);
-  const [containerWidth, setContainerWidth] = useState(0);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [renderError, setRenderError] = useState<string | null>(null);
+  const [width, setWidth] = useState(0);
+  const [progressPercent, setProgressPercent] = useState<number | null>(0);
+  const [error, setError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [restored, setRestored] = useState(initialPage != null);
+  const [emblaRef, embla] = useEmblaCarousel({ align: "start", containScroll: false, watchDrag: (_, event) => !(event instanceof TouchEvent && event.touches.length > 1) });
 
-  const {
-    data: fileUrl,
-    isLoading: urlLoading,
-    isError: urlError,
-    refetch,
-  } = useQuery({
+  const { data: fileUrl, isLoading, isError } = useQuery({
     queryKey: ["pdf-url", doc.file_path, reloadKey],
-    queryFn: () => pdfStorageService.getPdf(doc.file_path),
-    staleTime: 30 * 60 * 1000,
+    queryFn: () => pdfStorageService.getPdf(doc.file_path, setProgressPercent),
     retry: 1,
+    staleTime: Infinity,
   });
-
   const { data: progress } = useQuery({
     queryKey: ["reading-progress", doc.id],
     queryFn: () => getProgress(doc.id),
     enabled: initialPage == null,
   });
 
-  // Resume from the last saved page when no explicit page was requested.
   useEffect(() => {
-    if (restored || initialPage != null) return;
-    if (progress === undefined) return;
+    if (restored || initialPage != null || progress === undefined) return;
     if (progress?.current_page) setPage(progress.current_page);
     setRestored(true);
   }, [progress, restored, initialPage]);
 
-  // Track container width for fit-width rendering.
   useEffect(() => {
     const element = containerRef.current;
     if (!element) return;
-    const observer = new ResizeObserver(([entry]) => {
-      if (entry) setContainerWidth(entry.contentRect.width);
-    });
+    const observer = new ResizeObserver(([entry]) => { if (entry) setWidth(entry.contentRect.width); });
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
-    const onChange = () => setIsFullscreen(Boolean(window.document.fullscreenElement));
-    window.document.addEventListener("fullscreenchange", onChange);
-    return () => window.document.removeEventListener("fullscreenchange", onChange);
-  }, []);
+    if (!embla) return;
+    const selected = () => setPage(embla.selectedScrollSnap() + 1);
+    embla.on("select", selected);
+    return () => { embla.off("select", selected); };
+  }, [embla]);
 
-  // Debounced progress persistence.
+  useEffect(() => {
+    if (embla && restored && numPages) embla.scrollTo(Math.max(0, Math.min(page - 1, numPages - 1)), true);
+  }, [embla, restored, numPages]);
+
   useEffect(() => {
     if (!restored || !numPages) return;
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => {
+    const timer = setTimeout(() => {
       saveProgress({ pdfId: doc.id, currentPage: page, totalPages: numPages })
-        .then(() => {
-          queryClient.invalidateQueries({ queryKey: ["recent-documents"] });
-        })
+        .then(() => queryClient.invalidateQueries({ queryKey: ["recent-documents"] }))
         .catch(() => toast.error("Progress membaca gagal disimpan."));
-    }, SAVE_DEBOUNCE_MS);
-
-    return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-    };
+    }, 1200);
+    return () => clearTimeout(timer);
   }, [page, numPages, doc.id, restored, queryClient]);
 
-  const onLoadSuccess = useCallback(
-    ({ numPages: total }: { numPages: number }) => {
-      setNumPages(total);
-      setRenderError(null);
-      setPage((current) => Math.min(Math.max(1, current), total));
-      if (doc.total_pages !== total) {
-        updateTotalPages(doc.id, total).catch(() => undefined);
-      }
-    },
-    [doc.id, doc.total_pages],
-  );
+  const onLoadSuccess = useCallback(({ numPages: total }: { numPages: number }) => {
+    setNumPages(total);
+    setError(false);
+    setPage((current) => Math.min(Math.max(1, current), total));
+    if (doc.total_pages !== total) void updateTotalPages(doc.id, total).catch(() => undefined);
+  }, [doc.id, doc.total_pages]);
 
-  const pageWidth = useMemo(() => {
-    if (!containerWidth) return undefined;
-    const base = Math.min(containerWidth, 900);
-    return fitWidth ? base : base * scale;
-  }, [containerWidth, fitWidth, scale]);
-
-  const zoom = (delta: number) => {
-    setFitWidth(false);
-    setScale((s) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, Number((s + delta).toFixed(2)))));
+  const goTo = (value: number) => {
+    if (value < 1 || value > numPages) return;
+    setPage(value);
+    embla?.scrollTo(value - 1);
   };
-
-  const toggleFullscreen = () => {
-    const el = containerRef.current?.parentElement ?? window.document.documentElement;
-    if (window.document.fullscreenElement) {
-      window.document.exitFullscreen().catch(() => undefined);
-    } else {
-      el.requestFullscreen?.().catch(() => toast.error("Layar penuh tidak didukung."));
-    }
+  const distance = (touches: React.TouchList) => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+  const onTouchStart = (event: React.TouchEvent) => {
+    if (event.touches.length === 2) pinchRef.current = { distance: distance(event.touches), scale };
   };
-
-  const retry = () => {
-    setRenderError(null);
-    setReloadKey((k) => k + 1);
-    refetch();
+  const onTouchMove = (event: React.TouchEvent) => {
+    if (event.touches.length !== 2 || !pinchRef.current) return;
+    setScale(clamp(pinchRef.current.scale * distance(event.touches) / pinchRef.current.distance));
   };
-
-  const failed = urlError || renderError;
 
   return (
-    <div className="flex min-h-screen flex-col bg-reader">
-      <PdfToolbar
-        title={doc.title}
-        pdfId={doc.id}
-        pageNumber={page}
-        isFullscreen={isFullscreen}
-        onZoomIn={() => zoom(0.25)}
-        onZoomOut={() => zoom(-0.25)}
-        onFitWidth={() => {
-          setFitWidth(true);
-          setScale(1);
-        }}
-        onToggleFullscreen={toggleFullscreen}
-      />
-
-      <div ref={containerRef} className="mx-auto w-full max-w-3xl flex-1 px-3 pt-4 pb-24">
-        {failed ? (
-          <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-reader-foreground/20 px-6 py-16 text-center text-reader-foreground">
+    <div className="relative flex min-h-dvh flex-col overflow-hidden bg-reader">
+      <PdfToolbar pdfId={doc.id} pageNumber={page} />
+      <div ref={containerRef} className="mx-auto w-full max-w-5xl flex-1 px-2 pt-12 pb-36 sm:px-4">
+        {error || isError ? (
+          <div className="flex flex-col items-center gap-3 px-6 py-16 text-center text-reader-foreground">
             <FileWarning className="size-8 opacity-70" />
             <p className="font-display text-base font-semibold">PDF tidak dapat dimuat.</p>
-            <p className="max-w-xs text-sm opacity-70">
-              Periksa koneksi internet dan coba lagi.
-            </p>
-            <Button onClick={retry} className="mt-1">
-              Coba Lagi
-            </Button>
+            <p className="text-sm opacity-70">Periksa koneksi internet atau ruang penyimpanan, lalu coba lagi.</p>
+            <Button onClick={() => { setError(false); setReloadKey((key) => key + 1); }}>Coba Lagi</Button>
           </div>
-        ) : urlLoading || !fileUrl ? (
-          <Skeleton className="h-[70vh] w-full rounded-xl" />
+        ) : isLoading || !fileUrl ? (
+          <div className="space-y-3" role="status" aria-label="Mengunduh PDF">
+            <div className="flex items-center gap-2 text-sm text-reader-foreground"><Loader2 className="size-4 animate-spin" /> {progressPercent === null ? "Mengunduh PDF..." : `Mengunduh PDF ${progressPercent}%`}</div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted"><div className="h-full bg-primary transition-all" style={{ width: `${progressPercent ?? 10}%` }} /></div>
+            <Skeleton className="h-[65vh] w-full" />
+          </div>
         ) : (
-          <Document
-            key={reloadKey}
-            file={fileUrl}
-            options={PDF_OPTIONS}
-            onLoadSuccess={onLoadSuccess}
-            onLoadError={() => setRenderError("load")}
-            onSourceError={() => setRenderError("source")}
-            loading={<Skeleton className="h-[70vh] w-full rounded-xl" />}
-            error={<div />}
-            className="pdf-page-canvas flex justify-center"
-          >
-            <Page
-              pageNumber={page}
-              {...(pageWidth !== undefined ? { width: pageWidth } : {})}
-              renderAnnotationLayer={false}
-              renderTextLayer={false}
-              devicePixelRatio={RENDER_DPR}
-              onRenderError={() => setRenderError("render")}
-              loading={
-                <div className="grid h-[70vh] w-full place-items-center">
-                  <Loader2 className="size-6 animate-spin text-reader-foreground/60" />
-                </div>
-              }
-            />
-            {numPages > page ? (
-              <div className="hidden" aria-hidden>
-                <Page
-                  pageNumber={page + 1}
-                  {...(pageWidth !== undefined ? { width: pageWidth } : {})}
-                  renderAnnotationLayer={false}
-                  renderTextLayer={false}
-                  devicePixelRatio={RENDER_DPR}
-                />
+          <Document file={fileUrl} options={PDF_OPTIONS} onLoadSuccess={onLoadSuccess} onLoadError={() => setError(true)} onSourceError={() => setError(true)} loading={<Skeleton className="h-[65vh] w-full" />} error={<div />}>
+            <div ref={emblaRef} className="overflow-hidden">
+              <div className="flex touch-pan-y items-start">
+                {Array.from({ length: numPages }, (_, index) => (
+                  <div key={index} className="min-w-0 shrink-0 grow-0 basis-full overflow-auto">
+                    {Math.abs(index + 1 - page) <= 1 ? (
+                      <div className="pdf-page-canvas flex min-h-[50vh] justify-center" style={{ touchAction: "pan-y" }} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={() => { pinchRef.current = null; }}>
+                        <div className="origin-top transition-transform duration-150" style={{ transform: `scale(${scale})` }}>
+                          <Page pageNumber={index + 1} width={width ? Math.min(width, 900) : undefined} renderAnnotationLayer={false} renderTextLayer={false} devicePixelRatio={Math.min(window.devicePixelRatio || 1, 2)} loading={<div className="grid h-[60vh] place-items-center"><Loader2 className="size-6 animate-spin text-primary" /></div>} onRenderError={() => setError(true)} />
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
               </div>
-            ) : null}
+            </div>
           </Document>
         )}
       </div>
-
-      <PageNavigation
-        page={page}
-        totalPages={numPages}
-        onPrev={() => setPage((p) => Math.max(1, p - 1))}
-        onNext={() => setPage((p) => (numPages ? Math.min(numPages, p + 1) : p + 1))}
-      />
+      <PageNavigation page={page} totalPages={numPages} onPrev={() => goTo(page - 1)} onNext={() => goTo(page + 1)} onJump={goTo} zoom={Math.round(scale * 100)} onZoomIn={() => setScale((value) => clamp(value + .25))} onZoomOut={() => setScale((value) => clamp(value - .25))} onFitWidth={() => setScale(1)} />
     </div>
   );
 }
