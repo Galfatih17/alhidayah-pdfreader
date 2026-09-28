@@ -29,6 +29,8 @@ export const Route = createFileRoute("/reader/$id")({
         property: "og:description",
         content: "Baca dokumen PDF, simpan progress, dan tandai halaman.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: ReaderPage,

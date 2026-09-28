@@ -1,10 +1,10 @@
 import { Link } from "@tanstack/react-router";
-import { BookOpenText, Upload } from "lucide-react";
+import { BookOpenText } from "lucide-react";
 
 export function AppHeader({ subtitle }: { subtitle?: string }) {
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur-md">
-      <div className="mx-auto grid max-w-3xl grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3">
+       <div className="mx-auto flex max-w-3xl items-center px-4 py-3">
         <Link to="/" className="flex min-w-0 items-center gap-3">
           <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground">
             <BookOpenText className="size-5" />
@@ -17,13 +17,6 @@ export function AppHeader({ subtitle }: { subtitle?: string }) {
               <span className="block truncate text-xs text-muted-foreground">{subtitle}</span>
             ) : null}
           </span>
-        </Link>
-        <Link
-          to="/admin"
-          aria-label="Tambah dokumen"
-          className="grid size-10 shrink-0 place-items-center rounded-xl border border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-        >
-          <Upload className="size-4" />
         </Link>
       </div>
     </header>

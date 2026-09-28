@@ -16,6 +16,8 @@ export const Route = createFileRoute("/bookmarks")({
         property: "og:description",
         content: "Semua halaman penting yang kamu tandai saat membaca.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: BookmarksPage,

@@ -25,6 +25,8 @@ export const Route = createFileRoute("/admin")({
         property: "og:description",
         content: "Unggah file PDF baru beserta judul dan deskripsinya.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       { name: "robots", content: "noindex" },
     ],
   }),
