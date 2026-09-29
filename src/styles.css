@@ -172,6 +172,10 @@
   bottom: var(--app-nav-offset);
 }
 
+.reader-stage {
+  height: calc(100dvh - var(--app-nav-offset) - var(--reader-nav-height) - 0.75rem);
+}
+
 @media (display-mode: standalone) {
   :root {
     --app-nav-offset: calc(env(safe-area-inset-bottom, 0px) + 4.5rem);
