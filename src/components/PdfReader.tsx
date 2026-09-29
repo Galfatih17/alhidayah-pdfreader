@@ -1,3 +1,4 @@
+import "@/lib/mapPolyfill";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import useEmblaCarousel from "embla-carousel-react";
@@ -15,7 +16,9 @@ import { updateTotalPages } from "@/services/pdfService";
 import { getProgress, saveProgress } from "@/services/readingProgressService";
 import type { PdfDocument } from "@/services/types";
 
-pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
+if (!pdfjs.GlobalWorkerOptions.workerPort) {
+  pdfjs.GlobalWorkerOptions.workerPort = new Worker(new URL("../lib/pdf.worker.ts", import.meta.url), { type: "module" });
+}
 
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 3;
