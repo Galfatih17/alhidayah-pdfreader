@@ -32,7 +32,7 @@ export function PageNavigation({
     else setDraft(String(page));
   };
   return (
-    <div className="safe-bottom fixed inset-x-2 bottom-2 z-40 mx-auto max-w-3xl rounded-lg border border-border bg-background/95 text-foreground shadow-lg backdrop-blur-md sm:inset-x-4">
+    <div className="reader-nav-bottom fixed inset-x-2 z-40 mx-auto max-w-3xl rounded-lg border border-border bg-background/95 text-foreground shadow-lg backdrop-blur-md sm:inset-x-4">
       <div className="flex items-center justify-center gap-1 border-b border-border px-2 py-1.5">
         <Button asChild variant="ghost" size="icon" aria-label="Kembali ke Library" title="Kembali ke Library" className="size-9 shrink-0"><Link to="/library"><House className="size-4" /></Link></Button>
         <span className="ml-auto text-xs text-muted-foreground">Zoom {zoom}%</span>

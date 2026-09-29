@@ -27,16 +27,21 @@ const clamp = (value: number) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, value))
 export function PdfReader({ document: doc, initialPage }: { document: PdfDocument; initialPage?: number }) {
   const queryClient = useQueryClient();
   const containerRef = useRef<HTMLDivElement>(null);
-  const pinchRef = useRef<{ distance: number; scale: number } | null>(null);
+  const pageViewportRef = useRef<HTMLDivElement>(null);
+  const pageContentRef = useRef<HTMLDivElement>(null);
+  const pinchRef = useRef<{ distance: number; scale: number; offset: { x: number; y: number }; center: { x: number; y: number } } | null>(null);
+  const dragRef = useRef<{ x: number; y: number; offset: { x: number; y: number } } | null>(null);
   const [page, setPage] = useState(initialPage ?? 1);
   const [numPages, setNumPages] = useState(doc.total_pages ?? 0);
   const [scale, setScale] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [pinching, setPinching] = useState(false);
   const [width, setWidth] = useState(0);
   const [progressPercent, setProgressPercent] = useState<number | null>(0);
   const [error, setError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [restored, setRestored] = useState(initialPage != null);
-  const [emblaRef, embla] = useEmblaCarousel({ align: "start", containScroll: false, watchDrag: (_, event) => !(event instanceof TouchEvent && event.touches.length > 1) });
+  const [emblaRef, embla] = useEmblaCarousel({ align: "start", containScroll: false, watchDrag: scale <= 1 ? (_, event) => !(event instanceof TouchEvent && event.touches.length > 1) : false });
 
   const { data: fileUrl, isLoading, isError } = useQuery({
     queryKey: ["pdf-url", doc.file_path, reloadKey],
@@ -94,8 +99,45 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
 
   const goTo = (value: number) => {
     if (value < 1 || value > numPages) return;
+    setScale(1);
+    setOffset({ x: 0, y: 0 });
     setPage(value);
     embla?.scrollTo(value - 1);
+  };
+  const constrainedOffset = (next: { x: number; y: number }, zoom: number) => {
+    const viewport = pageViewportRef.current;
+    const content = pageContentRef.current;
+    if (!viewport || !content) return next;
+    const { clientWidth: viewWidth, clientHeight: viewHeight } = viewport;
+    const baseWidth = content.offsetWidth;
+    const baseHeight = content.offsetHeight;
+    const baseX = (viewWidth - baseWidth) / 2;
+    const scaledWidth = baseWidth * zoom;
+    const scaledHeight = baseHeight * zoom;
+    return {
+      x: scaledWidth <= viewWidth
+        ? (viewWidth - scaledWidth) / 2 - baseX
+        : Math.max(viewWidth - scaledWidth - baseX, Math.min(-baseX, next.x)),
+      y: scaledHeight <= viewHeight
+        ? 0
+        : Math.max(viewHeight - scaledHeight, Math.min(0, next.y)),
+    };
+  };
+  const changeZoom = (next: number) => {
+    const zoom = clamp(next);
+    if (zoom === 1) {
+      setScale(1);
+      setOffset({ x: 0, y: 0 });
+      return;
+    }
+    const viewport = pageViewportRef.current;
+    const content = pageContentRef.current;
+    if (viewport && content) {
+      const center = { x: viewport.clientWidth / 2 - (viewport.clientWidth - content.offsetWidth) / 2, y: viewport.clientHeight / 2 };
+      const ratio = zoom / scale;
+      setOffset(constrainedOffset({ x: center.x - (center.x - offset.x) * ratio, y: center.y - (center.y - offset.y) * ratio }, zoom));
+    }
+    setScale(zoom);
   };
   const distance = (touches: React.TouchList) => {
     const first = touches.item(0);
@@ -104,17 +146,46 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
     return Math.hypot(first.clientX - second.clientX, first.clientY - second.clientY);
   };
   const onTouchStart = (event: React.TouchEvent) => {
-    if (event.touches.length === 2) pinchRef.current = { distance: distance(event.touches), scale };
+    if (event.touches.length === 2) {
+      const viewport = pageViewportRef.current;
+      const content = pageContentRef.current;
+      if (!viewport || !content) return;
+      const rect = viewport.getBoundingClientRect();
+      const first = event.touches.item(0);
+      const second = event.touches.item(1);
+      if (!first || !second) return;
+      const center = {
+        x: (first.clientX + second.clientX) / 2 - rect.left - (viewport.clientWidth - content.offsetWidth) / 2,
+        y: (first.clientY + second.clientY) / 2 - rect.top + viewport.scrollTop,
+      };
+      pinchRef.current = { distance: distance(event.touches), scale, offset, center };
+      dragRef.current = null;
+      setPinching(true);
+    } else if (event.touches.length === 1 && scale > 1) {
+      const touch = event.touches.item(0);
+      if (touch) dragRef.current = { x: touch.clientX, y: touch.clientY, offset };
+    }
   };
   const onTouchMove = (event: React.TouchEvent) => {
-    if (event.touches.length !== 2 || !pinchRef.current) return;
-    setScale(clamp(pinchRef.current.scale * distance(event.touches) / pinchRef.current.distance));
+    if (event.touches.length === 2 && pinchRef.current) {
+      const { center, offset: start, distance: initialDistance, scale: initialScale } = pinchRef.current;
+      if (!initialDistance) return;
+      const zoom = clamp(initialScale * distance(event.touches) / initialDistance);
+      const ratio = zoom / initialScale;
+      setOffset(constrainedOffset({ x: center.x - (center.x - start.x) * ratio, y: center.y - (center.y - start.y) * ratio }, zoom));
+      setScale(zoom);
+    } else if (event.touches.length === 1 && dragRef.current && scale > 1) {
+      const touch = event.touches.item(0);
+      if (!touch) return;
+      setOffset(constrainedOffset({ x: dragRef.current.offset.x + touch.clientX - dragRef.current.x, y: dragRef.current.offset.y + touch.clientY - dragRef.current.y }, scale));
+    }
   };
+  const onTouchEnd = () => { pinchRef.current = null; dragRef.current = null; setPinching(false); };
 
   return (
     <div className="relative flex min-h-dvh flex-col overflow-hidden bg-reader">
       <PdfToolbar pdfId={doc.id} pageNumber={page} />
-      <div ref={containerRef} className="mx-auto w-full max-w-5xl flex-1 px-2 pt-12 pb-36 sm:px-4">
+      <div ref={containerRef} className="reader-stage mx-auto w-full max-w-5xl overflow-hidden px-2 pt-12 sm:px-4">
         {error || isError ? (
           <div className="flex flex-col items-center gap-3 px-6 py-16 text-center text-reader-foreground">
             <FileWarning className="size-8 opacity-70" />
@@ -130,14 +201,14 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
           </div>
         ) : (
           <Document file={fileUrl} onLoadSuccess={onLoadSuccess} onLoadError={() => setError(true)} onSourceError={() => setError(true)} loading={<Skeleton className="h-[65vh] w-full" />} error={<div />}>
-            <div ref={emblaRef} className="overflow-hidden">
-              <div className="flex touch-pan-y items-start">
+            <div ref={emblaRef} className="h-full overflow-hidden">
+              <div className="flex h-full items-start">
                 {Array.from({ length: numPages }, (_, index) => (
-                  <div key={index} className="min-w-0 shrink-0 grow-0 basis-full overflow-auto">
+                  <div key={index} className="h-full min-w-0 shrink-0 grow-0 basis-full overflow-hidden">
                     {Math.abs(index + 1 - page) <= 1 ? (
-                      <div className="pdf-page-canvas flex min-h-[50vh] justify-center" style={{ touchAction: "pan-y" }} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={() => { pinchRef.current = null; }}>
-                        <div className="origin-top transition-transform duration-150" style={{ transform: `scale(${scale})` }}>
-                          <Page pageNumber={index + 1} {...(width ? { width: Math.min(width, 900) } : {})} renderAnnotationLayer={false} renderTextLayer={false} devicePixelRatio={Math.min(window.devicePixelRatio || 1, 2)} loading={<div className="grid h-[60vh] place-items-center"><Loader2 className="size-6 animate-spin text-primary" /></div>} onRenderError={() => setError(true)} />
+                      <div ref={index + 1 === page ? pageViewportRef : null} className={`pdf-page-canvas h-full w-full overflow-hidden ${scale > 1 ? "cursor-grab touch-none active:cursor-grabbing" : "overflow-y-auto touch-pan-y"}`} onTouchStart={index + 1 === page ? onTouchStart : undefined} onTouchMove={index + 1 === page ? onTouchMove : undefined} onTouchEnd={index + 1 === page ? onTouchEnd : undefined} onTouchCancel={index + 1 === page ? onTouchEnd : undefined} onPointerDown={index + 1 === page && scale > 1 ? (event) => { if (event.pointerType !== "mouse") return; event.currentTarget.setPointerCapture(event.pointerId); dragRef.current = { x: event.clientX, y: event.clientY, offset }; } : undefined} onPointerMove={index + 1 === page && scale > 1 ? (event) => { if (event.pointerType !== "mouse" || !dragRef.current) return; setOffset(constrainedOffset({ x: dragRef.current.offset.x + event.clientX - dragRef.current.x, y: dragRef.current.offset.y + event.clientY - dragRef.current.y }, scale)); } : undefined} onPointerUp={() => { dragRef.current = null; }}>
+                        <div ref={index + 1 === page ? pageContentRef : null} className={`mx-auto w-max origin-top-left ${pinching || scale > 1 ? "" : "transition-transform duration-150"}`} style={index + 1 === page ? { transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})` } : undefined}>
+                          <Page pageNumber={index + 1} {...(width ? { width: Math.min(width - (width < 640 ? 16 : 32), 900) } : {})} renderAnnotationLayer={false} renderTextLayer={false} devicePixelRatio={Math.min(window.devicePixelRatio || 1, 2)} loading={<div className="grid h-[60vh] place-items-center"><Loader2 className="size-6 animate-spin text-primary" /></div>} onRenderError={() => setError(true)} />
                         </div>
                       </div>
                     ) : null}
@@ -148,7 +219,7 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
           </Document>
         )}
       </div>
-      <PageNavigation page={page} totalPages={numPages} onPrev={() => goTo(page - 1)} onNext={() => goTo(page + 1)} onJump={goTo} zoom={Math.round(scale * 100)} onZoomIn={() => setScale((value) => clamp(value + .25))} onZoomOut={() => setScale((value) => clamp(value - .25))} onFitWidth={() => setScale(1)} />
+      <PageNavigation page={page} totalPages={numPages} onPrev={() => goTo(page - 1)} onNext={() => goTo(page + 1)} onJump={goTo} zoom={Math.round(scale * 100)} onZoomIn={() => changeZoom(scale + .25)} onZoomOut={() => changeZoom(scale - .25)} onFitWidth={() => changeZoom(1)} />
     </div>
   );
 }

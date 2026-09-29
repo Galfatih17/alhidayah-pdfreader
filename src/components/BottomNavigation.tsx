@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { Bookmark, Home, Library } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const items = [
   { to: "/", label: "Beranda", icon: Home },
@@ -9,21 +10,15 @@ const items = [
 
 export function BottomNavigation() {
   return (
-    <nav className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 backdrop-blur-md">
-      <ul className="mx-auto flex max-w-3xl items-stretch">
+    <nav aria-label="Navigasi utama" className="app-nav-bottom fixed inset-x-0 z-40 mx-auto w-max rounded-full border border-border bg-background/95 p-1.5 shadow-lg backdrop-blur-md">
+      <ul className="flex items-center gap-1">
         {items.map(({ to, label, icon: Icon }) => (
-          <li key={to} className="flex-1">
-            <Link
-              to={to}
-              activeOptions={{ exact: to === "/" }}
-              activeProps={{ "data-active": "true" }}
-              className="group flex flex-col items-center gap-1 py-2.5 text-xs font-medium text-muted-foreground transition-colors data-[active=true]:text-primary"
-            >
-              <span className="grid h-7 w-14 place-items-center rounded-full transition-colors group-data-[active=true]:bg-accent">
+          <li key={to}>
+            <Button asChild variant="ghost" size="icon" className="size-11 rounded-full text-muted-foreground [&[data-active=true]]:bg-accent [&[data-active=true]]:text-primary">
+              <Link to={to} activeOptions={{ exact: to === "/" }} activeProps={{ "data-active": "true" }} aria-label={label} title={label}>
                 <Icon className="size-5" />
-              </span>
-              {label}
-            </Link>
+              </Link>
+            </Button>
           </li>
         ))}
       </ul>
