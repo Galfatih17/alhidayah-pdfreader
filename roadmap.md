@@ -1,5 +1,5 @@
-- [ ] PWA terpasang, bisa dibuka offline di aplikasi terbit, dengan pemberitahuan pembaruan dan tombol instal.
-- [ ] Layar baca lega: navigasi bawah, lompat halaman, zoom, swipe dan halaman tetangga siap dibaca.
-- [ ] PDF diunduh ke perangkat sebelum dibuka, dengan kemajuan unduhan.
-- [ ] Tema krem dan tidak ada pintasan unggah pada halaman publik.
-- [ ] Periksa tampilan dan perilaku pada desktop/ponsel.
+- [x] PWA terpasang, bisa dibuka offline di aplikasi terbit, dengan pemberitahuan pembaruan dan tombol instal.
+- [x] Layar baca lega: navigasi bawah, lompat halaman, zoom, swipe dan halaman tetangga siap dibaca.
+- [x] PDF diunduh ke perangkat sebelum dibuka, dengan kemajuan unduhan.
+- [x] Tema krem dan tidak ada pintasan unggah pada halaman publik.
+- [x] Periksa tampilan dan perilaku pada desktop/ponsel.
