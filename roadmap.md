@@ -3,3 +3,5 @@
 - [x] PDF diunduh ke perangkat sebelum dibuka, dengan kemajuan unduhan.
 - [x] Tema krem dan tidak ada pintasan unggah pada halaman publik.
 - [x] Periksa tampilan dan perilaku pada desktop/ponsel.
+- [ ] Ubah navigasi publik menjadi tombol melayang tetap di atas badge, termasuk jarak khusus PWA terinstal.
+- [ ] Batasi area baca di atas navigasi; zoom mengikuti titik cubitan, pan saat diperbesar, tanpa tumpang-tindih atau swipe tak sengaja.
