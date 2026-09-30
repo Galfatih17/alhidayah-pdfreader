@@ -1,0 +1,58 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Java JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Install Dependencies
+        run: |
+          npm install --legacy-peer-deps --force
+
+      - name: Generate Dummy Env File
+        run: |
+          touch .env
+          echo "VITE_SUPABASE_URL=https://placeholder.supabase.co" >> .env
+          echo "VITE_SUPABASE_ANON_KEY=placeholder" >> .env
+
+      - name: Build Web App
+        run: |
+          npx vite build || npm run build --if-present
+
+      - name: Setup Capacitor & Sync Android
+        run: |
+          npm install @capacitor/core @capacitor/cli @capacitor/android --legacy-peer-deps --force
+          npx cap init "Al Hidayah PDF Reader" "com.alhidayah.pdfreader" --web-dir dist
+          npx cap add android
+          npx cap sync
+
+      - name: Build APK via Gradle
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AlHidayah-PDFReader-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
