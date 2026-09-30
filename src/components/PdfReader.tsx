@@ -1,5 +1,5 @@
 import "@/lib/mapPolyfill";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import useEmblaCarousel from "embla-carousel-react";
 import { Document, Page, pdfjs } from "react-pdf";
@@ -23,6 +23,16 @@ if (!pdfjs.GlobalWorkerOptions.workerPort) {
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 3;
 const clamp = (value: number) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, value));
+const pageLoading = <div className="min-h-[60vh] w-full bg-background" />;
+
+// Keep the PDF canvas mounted and untouched when the selected slide or zoom changes.
+const RenderedPdfPage = memo(function RenderedPdfPage({ number, width, onError }: {
+  number: number;
+  width: number;
+  onError: () => void;
+}) {
+  return <Page pageNumber={number} {...(width ? { width: Math.min(width, 1200) } : {})} renderAnnotationLayer={false} renderTextLayer={false} devicePixelRatio={Math.min(window.devicePixelRatio || 1, 2)} loading={pageLoading} onRenderError={onError} />;
+});
 
 export function PdfReader({ document: doc, initialPage }: { document: PdfDocument; initialPage?: number }) {
   const queryClient = useQueryClient();
@@ -96,6 +106,7 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
     setPage((current) => Math.min(Math.max(1, current), total));
     if (doc.total_pages !== total) void updateTotalPages(doc.id, total).catch(() => undefined);
   }, [doc.id, doc.total_pages]);
+  const onPageError = useCallback(() => setError(true), []);
 
   const goTo = (value: number) => {
     if (value < 1 || value > numPages) return;
@@ -203,12 +214,12 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
           <Document file={fileUrl} onLoadSuccess={onLoadSuccess} onLoadError={() => setError(true)} onSourceError={() => setError(true)} loading={<Skeleton className="h-[65vh] w-full" />} error={<div />}>
             <div ref={emblaRef} className="h-full overflow-hidden">
               <div className="flex h-full items-start">
-                {Array.from({ length: numPages }, (_, index) => (
+                 {Array.from({ length: numPages }, (_, index) => (
                   <div key={index} className="h-full min-w-0 shrink-0 grow-0 basis-full overflow-hidden">
-                    {Math.abs(index + 1 - page) <= 1 ? (
+                     {Math.abs(index + 1 - page) <= 2 ? (
                       <div ref={index + 1 === page ? pageViewportRef : null} className={`pdf-page-canvas h-full w-full overflow-hidden ${scale > 1 ? "cursor-grab touch-none active:cursor-grabbing" : "overflow-y-auto touch-pan-y"}`} onTouchStart={index + 1 === page ? onTouchStart : undefined} onTouchMove={index + 1 === page ? onTouchMove : undefined} onTouchEnd={index + 1 === page ? onTouchEnd : undefined} onTouchCancel={index + 1 === page ? onTouchEnd : undefined} onPointerDown={index + 1 === page && scale > 1 ? (event) => { if (event.pointerType !== "mouse") return; event.currentTarget.setPointerCapture(event.pointerId); dragRef.current = { x: event.clientX, y: event.clientY, offset }; } : undefined} onPointerMove={index + 1 === page && scale > 1 ? (event) => { if (event.pointerType !== "mouse" || !dragRef.current) return; setOffset(constrainedOffset({ x: dragRef.current.offset.x + event.clientX - dragRef.current.x, y: dragRef.current.offset.y + event.clientY - dragRef.current.y }, scale)); } : undefined} onPointerUp={() => { dragRef.current = null; }}>
                         <div ref={index + 1 === page ? pageContentRef : null} className={`mx-auto w-max origin-top-left ${pinching || scale > 1 ? "" : "transition-transform duration-150"}`} style={index + 1 === page ? { transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})` } : undefined}>
-                           <Page pageNumber={index + 1} {...(width ? { width: Math.min(width, 1200) } : {})} renderAnnotationLayer={false} renderTextLayer={false} devicePixelRatio={Math.min(window.devicePixelRatio || 1, 2)} loading={<div className="grid h-[60vh] place-items-center"><Loader2 className="size-6 animate-spin text-primary" /></div>} onRenderError={() => setError(true)} />
+                            <RenderedPdfPage number={index + 1} width={width} onError={onPageError} />
                         </div>
                       </div>
                     ) : null}
