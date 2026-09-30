@@ -165,10 +165,15 @@
 
 :root {
   --app-nav-offset: calc(env(safe-area-inset-bottom, 0px) + 1rem);
+  --reader-nav-offset: calc(env(safe-area-inset-bottom, 0px) + 4.5rem);
 }
 
-.app-nav-bottom, .reader-nav-bottom {
+.app-nav-bottom {
   bottom: var(--app-nav-offset);
+}
+
+.reader-nav-bottom {
+  bottom: var(--reader-nav-offset);
 }
 
 .reader-stage {
@@ -182,6 +187,7 @@
 @media (display-mode: standalone) {
   :root {
     --app-nav-offset: calc(env(safe-area-inset-bottom, 0px) + 4.5rem);
+    --reader-nav-offset: calc(env(safe-area-inset-bottom, 0px) + 4.5rem);
   }
   .app-shell {
     padding-bottom: calc(10.5rem + env(safe-area-inset-bottom, 0px));
@@ -206,7 +212,5 @@
   & canvas {
     max-width: 100% !important;
     height: auto !important;
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-lift);
   }
 }
