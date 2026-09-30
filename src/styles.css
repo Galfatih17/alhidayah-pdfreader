@@ -165,7 +165,6 @@
 
 :root {
   --app-nav-offset: calc(env(safe-area-inset-bottom, 0px) + 1rem);
-  --reader-nav-height: 6.75rem;
 }
 
 .app-nav-bottom, .reader-nav-bottom {
@@ -173,7 +172,11 @@
 }
 
 .reader-stage {
-  height: calc(100dvh - var(--app-nav-offset) - var(--reader-nav-height) - 0.75rem);
+  height: 100dvh;
+}
+
+.reader-stage .react-pdf__Document {
+  height: 100%;
 }
 
 @media (display-mode: standalone) {

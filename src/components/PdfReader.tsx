@@ -183,9 +183,9 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
   const onTouchEnd = () => { pinchRef.current = null; dragRef.current = null; setPinching(false); };
 
   return (
-    <div className="relative flex min-h-dvh flex-col overflow-hidden bg-reader">
-      <PdfToolbar pdfId={doc.id} pageNumber={page} />
-      <div ref={containerRef} className="reader-stage mx-auto w-full max-w-5xl overflow-hidden px-2 pt-12 sm:px-4">
+    <div className="relative h-dvh overflow-hidden bg-reader">
+      <PdfToolbar pdfId={doc.id} pageNumber={page} title={doc.title} />
+      <div ref={containerRef} className="reader-stage mx-auto w-full overflow-hidden pt-[calc(env(safe-area-inset-top,0px)+3rem)]">
         {error || isError ? (
           <div className="flex flex-col items-center gap-3 px-6 py-16 text-center text-reader-foreground">
             <FileWarning className="size-8 opacity-70" />
