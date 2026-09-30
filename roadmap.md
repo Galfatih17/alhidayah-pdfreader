@@ -4,5 +4,5 @@
 - [x] Tema krem dan tidak ada pintasan unggah pada halaman publik.
 - [x] Periksa tampilan dan perilaku pada desktop/ponsel.
 - [ ] Ubah navigasi publik menjadi tombol melayang tetap di atas badge, termasuk jarak khusus PWA terinstal.
-- [ ] Batasi area baca di atas navigasi; zoom mengikuti titik cubitan, pan saat diperbesar, tanpa tumpang-tindih atau swipe tak sengaja.
-- [ ] Jadikan layar baca penuh dengan header Home/judul/Bookmark dan navigasi bawah mengambang yang dapat dibuka/tutup di atas badge.
+- [x] Batasi tiap lembar agar tidak tumpang-tindih; zoom mengikuti titik cubitan, pan saat diperbesar, tanpa swipe tak sengaja.
+- [x] Jadikan layar baca penuh dengan header Home/judul/Bookmark dan navigasi bawah mengambang yang dapat dibuka/tutup di atas badge.

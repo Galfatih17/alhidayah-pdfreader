@@ -11,3 +11,4 @@
 
 - The installable offline shell uses vite-plugin-pwa generateSW and a single guarded registration wrapper; preview/dev unregister app workers to avoid stale pages.
 - PDF binaries live in IndexedDB and the reader opens local Blob URLs only after a full download; app-shell caching excludes private document URLs.
+- The reader uses a full-viewport stage with an overlay header and collapsible bottom controls, so document space stays available when controls are closed.
