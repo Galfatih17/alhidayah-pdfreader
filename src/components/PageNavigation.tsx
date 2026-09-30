@@ -1,5 +1,4 @@
-import { ChevronLeft, ChevronRight, House, MoveHorizontal, ZoomIn, ZoomOut } from "lucide-react";
-import { Link } from "@tanstack/react-router";
+import { ChevronDown, ChevronLeft, ChevronRight, Menu, MoveHorizontal, ZoomIn, ZoomOut } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 
@@ -25,6 +24,7 @@ export function PageNavigation({
   onFitWidth: () => void;
 }) {
   const [draft, setDraft] = useState(String(page));
+  const [expanded, setExpanded] = useState(false);
   useEffect(() => setDraft(String(page)), [page]);
   const commit = () => {
     const value = Number(draft);
@@ -32,10 +32,10 @@ export function PageNavigation({
     else setDraft(String(page));
   };
   return (
-    <div className="reader-nav-bottom fixed inset-x-2 z-40 mx-auto max-w-3xl rounded-lg border border-border bg-background/95 text-foreground shadow-lg backdrop-blur-md sm:inset-x-4">
-      <div className="flex items-center justify-center gap-1 border-b border-border px-2 py-1.5">
-        <Button asChild variant="ghost" size="icon" aria-label="Kembali ke Library" title="Kembali ke Library" className="size-9 shrink-0"><Link to="/library"><House className="size-4" /></Link></Button>
-        <span className="ml-auto text-xs text-muted-foreground">Zoom {zoom}%</span>
+    <nav aria-label="Navigasi halaman PDF" className="reader-nav-bottom pointer-events-none fixed inset-x-2 z-40 mx-auto flex max-w-3xl flex-col items-center gap-2 sm:inset-x-4">
+      {expanded && <div id="reader-controls" className="pointer-events-auto w-full rounded-lg border border-border bg-background/95 text-foreground shadow-lg backdrop-blur-md">
+      <div className="flex items-center justify-end gap-1 border-b border-border px-2 py-1.5">
+        <span className="mr-auto text-xs text-muted-foreground tabular-nums">Zoom {zoom}%</span>
         <Button variant="ghost" size="icon" aria-label="Perkecil" title="Perkecil" onClick={onZoomOut} className="size-9"><ZoomOut className="size-4" /></Button>
         <Button variant="ghost" size="icon" aria-label="Perbesar" title="Perbesar" onClick={onZoomIn} className="size-9"><ZoomIn className="size-4" /></Button>
         <Button variant="ghost" size="sm" onClick={onFitWidth} title="Fit Layar" className="h-9 gap-1"><MoveHorizontal className="size-4" /> Fit Layar</Button>
@@ -68,6 +68,10 @@ export function PageNavigation({
           <ChevronRight className="size-5" />
         </Button>
       </div>
-    </div>
+      </div>}
+      <Button type="button" size="icon" variant="default" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded} aria-controls="reader-controls" aria-label={expanded ? "Tutup navigasi halaman" : "Buka navigasi halaman"} title={expanded ? "Tutup navigasi halaman" : "Buka navigasi halaman"} className="pointer-events-auto size-11 shrink-0 rounded-full shadow-lg">
+        {expanded ? <ChevronDown className="size-5" /> : <Menu className="size-5" />}
+      </Button>
+    </nav>
   );
 }
