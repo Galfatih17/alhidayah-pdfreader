@@ -69,7 +69,7 @@ export function PageNavigation({
         </Button>
       </div>
       </div>}
-      <Button type="button" size="icon" variant="default" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded} aria-controls="reader-controls" aria-label={expanded ? "Tutup navigasi halaman" : "Buka navigasi halaman"} title={expanded ? "Tutup navigasi halaman" : "Buka navigasi halaman"} className="pointer-events-auto size-11 shrink-0 rounded-full shadow-lg">
+      <Button type="button" size="icon" variant="default" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded} aria-controls="reader-controls" aria-label={expanded ? "Tutup navigasi halaman" : "Buka navigasi halaman"} title={expanded ? "Tutup navigasi halaman" : "Buka navigasi halaman"} className={`pointer-events-auto size-11 shrink-0 rounded-full shadow-lg ${expanded ? "" : "bg-background/60 text-foreground backdrop-blur-md hover:bg-background/75"}`}>
         {expanded ? <ChevronDown className="size-5" /> : <Menu className="size-5" />}
       </Button>
     </nav>
