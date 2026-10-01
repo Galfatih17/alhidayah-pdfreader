@@ -1,4 +1,5 @@
-import { ChevronDown, ChevronLeft, ChevronRight, Menu, MoveHorizontal, ZoomIn, ZoomOut } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Home, Library, Menu, MoveHorizontal, ZoomIn, ZoomOut } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 
