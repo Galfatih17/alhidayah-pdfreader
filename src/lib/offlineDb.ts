@@ -1,7 +1,8 @@
 const DB_NAME = "pdf-reader-offline";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 export const PDF_STORE = "pdfs";
 export const META_STORE = "meta";
+export const RENDER_STORE = "renders";
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -14,6 +15,7 @@ function openDb(): Promise<IDBDatabase> {
         const db = req.result;
         if (!db.objectStoreNames.contains(PDF_STORE)) db.createObjectStore(PDF_STORE);
         if (!db.objectStoreNames.contains(META_STORE)) db.createObjectStore(META_STORE);
+        if (!db.objectStoreNames.contains(RENDER_STORE)) db.createObjectStore(RENDER_STORE);
       };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => {
