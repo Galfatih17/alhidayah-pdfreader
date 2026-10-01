@@ -42,6 +42,9 @@ export function PageNavigation({
         <Button variant="ghost" size="sm" onClick={onFitWidth} title="Fit Layar" className="h-9 gap-1"><MoveHorizontal className="size-4" /> Fit Layar</Button>
       </div>
       <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+        <Button asChild variant="ghost" size="icon" className="size-9 shrink-0">
+          <Link to="/" aria-label="Ke Beranda" title="Beranda"><Home className="size-5" /></Link>
+        </Button>
         <Button
           type="button"
           variant="ghost"
@@ -67,6 +70,9 @@ export function PageNavigation({
         >
           <span className="hidden sm:inline">Berikutnya</span>
           <ChevronRight className="size-5" />
+        </Button>
+        <Button asChild variant="ghost" size="icon" className="size-9 shrink-0">
+          <Link to="/library" aria-label="Ke Library" title="Library"><Library className="size-5" /></Link>
         </Button>
       </div>
       </div>}
