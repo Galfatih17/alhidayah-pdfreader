@@ -28,7 +28,7 @@ const clamp = (value: number) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, value))
 const pageLoading = <div className="min-h-[60vh] w-full bg-background" />;
 
 // Cached page image: stays mounted once ready; zoom scales the image via CSS (no re-render).
-const CachedPdfPage = memo(function CachedPdfPage({ url, width, number }: { url?: string; width: number; number: number }) {
+const CachedPdfPage = memo(function CachedPdfPage({ url, width, number }: { url: string | undefined; width: number; number: number }) {
   if (!url) return pageLoading;
   return <img src={url} alt={`Halaman ${number}`} width={width} style={{ width }} draggable={false} decoding="async" className="block max-w-none select-none" />;
 });
