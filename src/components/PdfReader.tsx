@@ -2,7 +2,9 @@ import "@/lib/mapPolyfill";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import useEmblaCarousel from "embla-carousel-react";
-import { Document, Page, pdfjs } from "react-pdf";
+import { Document, pdfjs } from "react-pdf";
+import type { PDFDocumentProxy } from "pdfjs-dist";
+import { getCachedPage, putCachedPage, renderPageToBlob } from "@/lib/pageRenderCache";
 import { FileWarning, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import "react-pdf/dist/Page/AnnotationLayer.css";
@@ -25,13 +27,10 @@ const MAX_SCALE = 3;
 const clamp = (value: number) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, value));
 const pageLoading = <div className="min-h-[60vh] w-full bg-background" />;
 
-// Keep the PDF canvas mounted and untouched when the selected slide or zoom changes.
-const RenderedPdfPage = memo(function RenderedPdfPage({ number, width, onError }: {
-  number: number;
-  width: number;
-  onError: () => void;
-}) {
-  return <Page pageNumber={number} {...(width ? { width: Math.min(width, 1200) } : {})} renderAnnotationLayer={false} renderTextLayer={false} devicePixelRatio={Math.min(window.devicePixelRatio || 1, 2)} loading={pageLoading} onRenderError={onError} />;
+// Cached page image: stays mounted once ready; zoom scales the image via CSS (no re-render).
+const CachedPdfPage = memo(function CachedPdfPage({ url, width, number }: { url?: string; width: number; number: number }) {
+  if (!url) return pageLoading;
+  return <img src={url} alt={`Halaman ${number}`} width={width} style={{ width }} draggable={false} decoding="async" className="block max-w-none select-none" />;
 });
 
 export function PdfReader({ document: doc, initialPage }: { document: PdfDocument; initialPage?: number }) {
@@ -51,6 +50,11 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
   const [error, setError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [restored, setRestored] = useState(initialPage != null);
+  const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
+  const [urls, setUrls] = useState<Record<number, string>>({});
+  const pageRef = useRef(page);
+  pageRef.current = page;
+  const renderWidth = width ? Math.round(Math.min(width, 1200)) : 0;
   const [emblaRef, embla] = useEmblaCarousel({ align: "start", containScroll: false, watchDrag: scale <= 1 ? (_, event) => !(event instanceof TouchEvent && event.touches.length > 1) : false });
 
   const { data: fileUrl, isLoading, isError } = useQuery({
@@ -100,13 +104,53 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
     return () => clearTimeout(timer);
   }, [page, numPages, doc.id, restored, queryClient]);
 
-  const onLoadSuccess = useCallback(({ numPages: total }: { numPages: number }) => {
+  const onLoadSuccess = useCallback((proxy: PDFDocumentProxy) => {
+    const total = proxy.numPages;
+    setPdf(proxy);
     setNumPages(total);
     setError(false);
     setPage((current) => Math.min(Math.max(1, current), total));
     if (doc.total_pages !== total) void updateTotalPages(doc.id, total).catch(() => undefined);
   }, [doc.id, doc.total_pages]);
-  const onPageError = useCallback(() => setError(true), []);
+
+  // Fill page images: cache hit first, otherwise render once with pdf.js and store.
+  // Order: current page, then outward neighbours, progressively the whole document.
+  useEffect(() => {
+    if (!pdf || !renderWidth || !numPages) return;
+    let cancelled = false;
+    const created: string[] = [];
+    const done = new Set<number>();
+    setUrls({});
+    const nextPage = () => {
+      const current = pageRef.current;
+      for (let d = 0; d < numPages; d++) {
+        for (const n of [current + d, current - d]) if (n >= 1 && n <= numPages && !done.has(n)) return n;
+      }
+      return 0;
+    };
+    void (async () => {
+      while (!cancelled) {
+        const n = nextPage();
+        if (!n) break;
+        done.add(n);
+        try {
+          let blob = await getCachedPage(doc.id, n, renderWidth);
+          if (!blob) {
+            blob = await renderPageToBlob(pdf, n, renderWidth);
+            void putCachedPage(doc.id, n, renderWidth, blob);
+          }
+          if (cancelled) break;
+          const url = URL.createObjectURL(blob);
+          created.push(url);
+          setUrls((prev) => ({ ...prev, [n]: url }));
+        } catch {
+          if (!cancelled && n === pageRef.current) setError(true);
+        }
+        if (Math.abs(n - pageRef.current) > 2) await new Promise((r) => setTimeout(r, 40));
+      }
+    })();
+    return () => { cancelled = true; created.forEach((u) => URL.revokeObjectURL(u)); };
+  }, [pdf, renderWidth, numPages, doc.id]);
 
   const goTo = (value: number) => {
     if (value < 1 || value > numPages) return;
@@ -216,13 +260,13 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
               <div className="flex h-full items-start">
                  {Array.from({ length: numPages }, (_, index) => (
                   <div key={index} className="h-full min-w-0 shrink-0 grow-0 basis-full overflow-hidden">
-                     {Math.abs(index + 1 - page) <= 2 ? (
+                     {(
                       <div ref={index + 1 === page ? pageViewportRef : null} className={`pdf-page-canvas h-full w-full overflow-hidden ${scale > 1 ? "cursor-grab touch-none active:cursor-grabbing" : "overflow-y-auto touch-pan-y"}`} onTouchStart={index + 1 === page ? onTouchStart : undefined} onTouchMove={index + 1 === page ? onTouchMove : undefined} onTouchEnd={index + 1 === page ? onTouchEnd : undefined} onTouchCancel={index + 1 === page ? onTouchEnd : undefined} onPointerDown={index + 1 === page && scale > 1 ? (event) => { if (event.pointerType !== "mouse") return; event.currentTarget.setPointerCapture(event.pointerId); dragRef.current = { x: event.clientX, y: event.clientY, offset }; } : undefined} onPointerMove={index + 1 === page && scale > 1 ? (event) => { if (event.pointerType !== "mouse" || !dragRef.current) return; setOffset(constrainedOffset({ x: dragRef.current.offset.x + event.clientX - dragRef.current.x, y: dragRef.current.offset.y + event.clientY - dragRef.current.y }, scale)); } : undefined} onPointerUp={() => { dragRef.current = null; }}>
                         <div ref={index + 1 === page ? pageContentRef : null} className={`mx-auto w-max origin-top-left ${pinching || scale > 1 ? "" : "transition-transform duration-150"}`} style={index + 1 === page ? { transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})` } : undefined}>
-                            <RenderedPdfPage number={index + 1} width={width} onError={onPageError} />
+                            <CachedPdfPage number={index + 1} width={renderWidth} url={urls[index + 1]} />
                         </div>
                       </div>
-                    ) : null}
+                    )}
                   </div>
                 ))}
               </div>
