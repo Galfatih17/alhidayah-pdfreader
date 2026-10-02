@@ -250,6 +250,7 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
   const tapRef = useRef<{ x: number; y: number; time: number; moved: boolean; multi: boolean } | null>(null);
   const lastTapRef = useRef<{ x: number; y: number; time: number } | null>(null);
   const overshootRef = useRef(0);
+  const lastTouchAtRef = useRef(0);
   const onTouchStart = (event: React.TouchEvent) => {
     const firstTouch = event.touches.item(0);
     if (event.touches.length === 1 && firstTouch) tapRef.current = { x: firstTouch.clientX, y: firstTouch.clientY, time: Date.now(), moved: false, multi: false };
@@ -290,6 +291,7 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
     }
   };
   const onTouchEnd = (event: React.TouchEvent) => {
+    lastTouchAtRef.current = Date.now();
     const overshoot = overshootRef.current;
     const tap = tapRef.current;
     pinchRef.current = null; dragRef.current = null; overshootRef.current = 0; setPinching(false);
@@ -336,7 +338,7 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
                  {Array.from({ length: numPages }, (_, index) => (
                   <div key={index} className="h-full min-w-0 shrink-0 grow-0 basis-full overflow-hidden">
                      {(
-                      <div ref={index + 1 === page ? pageViewportRef : null} className={`pdf-page-canvas h-full w-full overflow-hidden ${scale > 1 ? "cursor-grab touch-none active:cursor-grabbing" : "overflow-y-auto touch-pan-y"}`} onTouchStart={index + 1 === page ? onTouchStart : undefined} onTouchMove={index + 1 === page ? onTouchMove : undefined} onTouchEnd={index + 1 === page ? onTouchEnd : undefined} onTouchCancel={index + 1 === page ? onTouchEnd : undefined} onPointerDown={index + 1 === page && scale > 1 ? (event) => { if (event.pointerType !== "mouse") return; event.currentTarget.setPointerCapture(event.pointerId); dragRef.current = { x: event.clientX, y: event.clientY, offset }; } : undefined} onPointerMove={index + 1 === page && scale > 1 ? (event) => { if (event.pointerType !== "mouse" || !dragRef.current) return; setOffset(constrainedOffset({ x: dragRef.current.offset.x + event.clientX - dragRef.current.x, y: dragRef.current.offset.y + event.clientY - dragRef.current.y }, scale)); } : undefined} onPointerUp={() => { dragRef.current = null; }} onDoubleClick={index + 1 === page ? (event) => toggleZoomAt(event.clientX, event.clientY) : undefined}>
+                      <div ref={index + 1 === page ? pageViewportRef : null} className={`pdf-page-canvas h-full w-full overflow-hidden ${scale > 1 ? "cursor-grab touch-none active:cursor-grabbing" : "overflow-y-auto touch-pan-y"}`} onTouchStart={index + 1 === page ? onTouchStart : undefined} onTouchMove={index + 1 === page ? onTouchMove : undefined} onTouchEnd={index + 1 === page ? onTouchEnd : undefined} onTouchCancel={index + 1 === page ? onTouchEnd : undefined} onPointerDown={index + 1 === page && scale > 1 ? (event) => { if (event.pointerType !== "mouse") return; event.currentTarget.setPointerCapture(event.pointerId); dragRef.current = { x: event.clientX, y: event.clientY, offset }; } : undefined} onPointerMove={index + 1 === page && scale > 1 ? (event) => { if (event.pointerType !== "mouse" || !dragRef.current) return; setOffset(constrainedOffset({ x: dragRef.current.offset.x + event.clientX - dragRef.current.x, y: dragRef.current.offset.y + event.clientY - dragRef.current.y }, scale)); } : undefined} onPointerUp={() => { dragRef.current = null; }} onDoubleClick={index + 1 === page ? (event) => { if (Date.now() - lastTouchAtRef.current > 800) toggleZoomAt(event.clientX, event.clientY); } : undefined}>
                         <div ref={index + 1 === page ? pageContentRef : null} className={`mx-auto w-max origin-top-left ${pinching || scale > 1 ? "" : "transition-transform duration-150"}`} style={index + 1 === page ? { transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})` } : undefined}>
                             <CachedPdfPage number={index + 1} width={renderWidth} url={urls[index + 1]} />
                         </div>
