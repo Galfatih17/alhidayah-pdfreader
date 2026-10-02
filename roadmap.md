@@ -7,3 +7,5 @@
 - [x] Batasi tiap lembar agar tidak tumpang-tindih; zoom mengikuti titik cubitan, pan saat diperbesar, tanpa swipe tak sengaja.
 - [x] Jadikan layar baca penuh dengan header Home/judul/Bookmark dan navigasi bawah mengambang yang dapat dibuka/tutup di atas badge.
 - [ ] Hilangkan kedip saat berpindah halaman PDF dan periksa kelancaran serta tampilan ponsel/desktop.
+
+- [ ] Security: tighten access rules on bookmarks, reading progress, and document info
