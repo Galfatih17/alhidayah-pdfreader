@@ -99,12 +99,25 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
 
   useEffect(() => {
     if (!restored || !numPages) return;
-    const timer = setTimeout(() => {
+    let pending = true;
+    const save = () => {
+      if (!pending) return;
+      pending = false;
       saveProgress({ pdfId: doc.id, currentPage: page, totalPages: numPages })
         .then(() => queryClient.invalidateQueries({ queryKey: ["recent-documents"] }))
-        .catch(() => toast.error("Progress membaca gagal disimpan."));
-    }, 1200);
-    return () => clearTimeout(timer);
+        .catch(() => { if (navigator.onLine) toast.error("Progress membaca gagal disimpan."); });
+    };
+    const timer = setTimeout(save, 800);
+    const onHide = () => { if (document.visibilityState === "hidden") save(); };
+    document.addEventListener("visibilitychange", onHide);
+    window.addEventListener("pagehide", save);
+    // Save immediately when leaving the reader so history is never missed.
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onHide);
+      window.removeEventListener("pagehide", save);
+      save();
+    };
   }, [page, numPages, doc.id, restored, queryClient]);
 
   const onLoadSuccess = useCallback((proxy: PDFDocumentProxy) => {
