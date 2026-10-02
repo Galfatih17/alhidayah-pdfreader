@@ -97,28 +97,34 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
     if (embla && restored && numPages) embla.scrollTo(Math.max(0, Math.min(page - 1, numPages - 1)), true);
   }, [embla, restored, numPages]);
 
+  const unsavedRef = useRef<{ currentPage: number; totalPages: number } | null>(null);
+  const flushProgress = useCallback(() => {
+    const value = unsavedRef.current;
+    if (!value) return;
+    unsavedRef.current = null;
+    saveProgress({ pdfId: doc.id, ...value })
+      .then(() => queryClient.invalidateQueries({ queryKey: ["recent-documents"] }))
+      .catch(() => { if (navigator.onLine) toast.error("Progress membaca gagal disimpan."); });
+  }, [doc.id, queryClient]);
+
   useEffect(() => {
     if (!restored || !numPages) return;
-    let pending = true;
-    const save = () => {
-      if (!pending) return;
-      pending = false;
-      saveProgress({ pdfId: doc.id, currentPage: page, totalPages: numPages })
-        .then(() => queryClient.invalidateQueries({ queryKey: ["recent-documents"] }))
-        .catch(() => { if (navigator.onLine) toast.error("Progress membaca gagal disimpan."); });
-    };
-    const timer = setTimeout(save, 800);
-    const onHide = () => { if (document.visibilityState === "hidden") save(); };
+    unsavedRef.current = { currentPage: page, totalPages: numPages };
+    const timer = setTimeout(flushProgress, 800);
+    return () => clearTimeout(timer);
+  }, [page, numPages, restored, flushProgress]);
+
+  // Save right away when leaving the reader or hiding the app so history is never missed.
+  useEffect(() => {
+    const onHide = () => { if (document.visibilityState === "hidden") flushProgress(); };
     document.addEventListener("visibilitychange", onHide);
-    window.addEventListener("pagehide", save);
-    // Save immediately when leaving the reader so history is never missed.
+    window.addEventListener("pagehide", flushProgress);
     return () => {
-      clearTimeout(timer);
       document.removeEventListener("visibilitychange", onHide);
-      window.removeEventListener("pagehide", save);
-      save();
+      window.removeEventListener("pagehide", flushProgress);
+      flushProgress();
     };
-  }, [page, numPages, doc.id, restored, queryClient]);
+  }, [flushProgress]);
 
   const onLoadSuccess = useCallback((proxy: PDFDocumentProxy) => {
     const total = proxy.numPages;
