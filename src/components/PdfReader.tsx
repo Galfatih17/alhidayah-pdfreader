@@ -11,6 +11,7 @@ import "react-pdf/dist/Page/AnnotationLayer.css";
 
 import { PageNavigation } from "./PageNavigation";
 import { PdfToolbar } from "./PdfToolbar";
+import { OutlineSheet, type OutlineNode } from "./OutlineSheet";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { pdfStorageService } from "@/services/pdfStorageService";
@@ -44,6 +45,8 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
   const [numPages, setNumPages] = useState(doc.total_pages ?? 0);
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [outline, setOutline] = useState<OutlineNode[]>([]);
+  const [outlineOpen, setOutlineOpen] = useState(false);
   const [pinching, setPinching] = useState(false);
   const [width, setWidth] = useState(0);
   const [progressPercent, setProgressPercent] = useState<number | null>(0);
@@ -151,6 +154,31 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
     })();
     return () => { cancelled = true; created.forEach((u) => URL.revokeObjectURL(u)); };
   }, [pdf, renderWidth, numPages, doc.id]);
+
+  // Read the PDF's built-in outline (table of contents) and resolve each entry to a page number.
+  useEffect(() => {
+    if (!pdf) return;
+    let cancelled = false;
+    type RawItem = { title: string; dest: unknown; items: RawItem[] };
+    const resolvePage = async (dest: unknown): Promise<number | null> => {
+      try {
+        const explicit = typeof dest === "string" ? await pdf.getDestination(dest) : dest;
+        if (!Array.isArray(explicit) || !explicit[0]) return null;
+        const ref = explicit[0];
+        if (typeof ref === "number") return ref + 1;
+        return (await pdf.getPageIndex(ref)) + 1;
+      } catch {
+        return null;
+      }
+    };
+    const build = (items: RawItem[]): Promise<OutlineNode[]> =>
+      Promise.all(items.map(async (item) => ({ title: item.title, page: await resolvePage(item.dest), children: await build(item.items ?? []) })));
+    void pdf.getOutline().then(async (raw) => {
+      const nodes = raw ? await build(raw as unknown as RawItem[]) : [];
+      if (!cancelled) setOutline(nodes);
+    }).catch(() => { if (!cancelled) setOutline([]); });
+    return () => { cancelled = true; };
+  }, [pdf]);
 
   const goTo = (value: number) => {
     if (value < 1 || value > numPages) return;
