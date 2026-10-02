@@ -200,19 +200,39 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
     if (!first || !second) return 0;
     return Math.hypot(first.clientX - second.clientX, first.clientY - second.clientY);
   };
+  const contentPoint = (clientX: number, clientY: number) => {
+    const viewport = pageViewportRef.current;
+    const content = pageContentRef.current;
+    if (!viewport || !content) return null;
+    const rect = viewport.getBoundingClientRect();
+    return {
+      x: clientX - rect.left - (viewport.clientWidth - content.offsetWidth) / 2,
+      y: clientY - rect.top + viewport.scrollTop,
+    };
+  };
+  const toggleZoomAt = (clientX: number, clientY: number) => {
+    if (scale > 1) { setScale(1); setOffset({ x: 0, y: 0 }); return; }
+    const point = contentPoint(clientX, clientY);
+    if (!point) return;
+    const zoom = 2;
+    const ratio = zoom / scale;
+    setOffset(constrainedOffset({ x: point.x - (point.x - offset.x) * ratio, y: point.y - (point.y - offset.y) * ratio }, zoom));
+    setScale(zoom);
+  };
+  const tapRef = useRef<{ x: number; y: number; time: number; moved: boolean; multi: boolean } | null>(null);
+  const lastTapRef = useRef<{ x: number; y: number; time: number } | null>(null);
+  const overshootRef = useRef(0);
   const onTouchStart = (event: React.TouchEvent) => {
+    const firstTouch = event.touches.item(0);
+    if (event.touches.length === 1 && firstTouch) tapRef.current = { x: firstTouch.clientX, y: firstTouch.clientY, time: Date.now(), moved: false, multi: false };
+    else if (tapRef.current) tapRef.current.multi = true;
+    overshootRef.current = 0;
     if (event.touches.length === 2) {
-      const viewport = pageViewportRef.current;
-      const content = pageContentRef.current;
-      if (!viewport || !content) return;
-      const rect = viewport.getBoundingClientRect();
       const first = event.touches.item(0);
       const second = event.touches.item(1);
       if (!first || !second) return;
-      const center = {
-        x: (first.clientX + second.clientX) / 2 - rect.left - (viewport.clientWidth - content.offsetWidth) / 2,
-        y: (first.clientY + second.clientY) / 2 - rect.top + viewport.scrollTop,
-      };
+      const center = contentPoint((first.clientX + second.clientX) / 2, (first.clientY + second.clientY) / 2);
+      if (!center) return;
       pinchRef.current = { distance: distance(event.touches), scale, offset, center };
       dragRef.current = null;
       setPinching(true);
@@ -222,6 +242,8 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
     }
   };
   const onTouchMove = (event: React.TouchEvent) => {
+    const t = event.touches.item(0);
+    if (tapRef.current && t && Math.hypot(t.clientX - tapRef.current.x, t.clientY - tapRef.current.y) > 10) tapRef.current.moved = true;
     if (event.touches.length === 2 && pinchRef.current) {
       const { center, offset: start, distance: initialDistance, scale: initialScale } = pinchRef.current;
       if (!initialDistance) return;
@@ -232,14 +254,39 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
     } else if (event.touches.length === 1 && dragRef.current && scale > 1) {
       const touch = event.touches.item(0);
       if (!touch) return;
-      setOffset(constrainedOffset({ x: dragRef.current.offset.x + touch.clientX - dragRef.current.x, y: dragRef.current.offset.y + touch.clientY - dragRef.current.y }, scale));
+      const desired = { x: dragRef.current.offset.x + touch.clientX - dragRef.current.x, y: dragRef.current.offset.y + touch.clientY - dragRef.current.y };
+      const next = constrainedOffset(desired, scale);
+      // Distance pushed past the left/right edge of the zoomed page.
+      overshootRef.current = desired.x - next.x;
+      setOffset(next);
     }
   };
-  const onTouchEnd = () => { pinchRef.current = null; dragRef.current = null; setPinching(false); };
+  const onTouchEnd = (event: React.TouchEvent) => {
+    const overshoot = overshootRef.current;
+    const tap = tapRef.current;
+    pinchRef.current = null; dragRef.current = null; overshootRef.current = 0; setPinching(false);
+    if (event.touches.length > 0) return;
+    tapRef.current = null;
+    if (scale > 1 && Math.abs(overshoot) > 70) {
+      goTo(overshoot > 0 ? page - 1 : page + 1);
+      return;
+    }
+    if (!tap || tap.moved || tap.multi || Date.now() - tap.time > 250) return;
+    const now = Date.now();
+    const last = lastTapRef.current;
+    if (last && now - last.time < 300 && Math.hypot(tap.x - last.x, tap.y - last.y) < 40) {
+      lastTapRef.current = null;
+      event.preventDefault();
+      toggleZoomAt(tap.x, tap.y);
+    } else {
+      lastTapRef.current = { x: tap.x, y: tap.y, time: now };
+    }
+  };
 
   return (
     <div className="relative h-dvh overflow-hidden bg-reader">
-      <PdfToolbar pdfId={doc.id} pageNumber={page} title={doc.title} />
+      <PdfToolbar pdfId={doc.id} pageNumber={page} title={doc.title} hasOutline={outline.length > 0} onOpenOutline={() => setOutlineOpen(true)} />
+      <OutlineSheet open={outlineOpen} onOpenChange={setOutlineOpen} outline={outline} onSelect={goTo} />
       <div ref={containerRef} className="reader-stage mx-auto w-full overflow-hidden pt-[calc(env(safe-area-inset-top,0px)+3rem)]">
         {error || isError ? (
           <div className="flex flex-col items-center gap-3 px-6 py-16 text-center text-reader-foreground">
