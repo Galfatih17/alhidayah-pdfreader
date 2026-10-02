@@ -5,7 +5,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 export type OutlineNode = { title: string; page: number | null; children: OutlineNode[] };
 
 function OutlineItem({ node, depth, onSelect }: { node: OutlineNode; depth: number; onSelect: (page: number) => void }) {
-  const [open, setOpen] = useState(depth === 0 && false);
+  const [open, setOpen] = useState(false);
   const hasChildren = node.children.length > 0;
   return (
     <li>
