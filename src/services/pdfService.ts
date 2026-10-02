@@ -39,11 +39,8 @@ export async function getDocument(id: string): Promise<PdfDocument> {
 }
 
 export async function updateTotalPages(id: string, totalPages: number): Promise<void> {
-  const { error } = await supabase
-    .from("pdf_documents")
-    .update({ total_pages: totalPages })
-    .eq("id", id);
-  if (error) throw new Error(error.message);
+  const { setDocumentTotalPages } = await import("@/lib/documents.functions");
+  await setDocumentTotalPages({ data: { id, totalPages } });
 }
 
 export type UploadDocumentInput = {
