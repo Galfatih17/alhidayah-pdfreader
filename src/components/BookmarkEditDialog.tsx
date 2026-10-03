@@ -26,12 +26,12 @@ export function BookmarkEditDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   pageNumber: number;
-  initialTitle?: string | null;
-  initialNote?: string | null;
+  initialTitle?: string | null | undefined;
+  initialNote?: string | null | undefined;
   isEditing: boolean;
-  pending?: boolean;
+  pending?: boolean | undefined;
   onSave: (values: { title: string; note: string }) => void;
-  onDelete?: () => void;
+  onDelete?: (() => void) | undefined;
 }) {
   const [title, setTitle] = useState("");
   const [note, setNote] = useState("");
