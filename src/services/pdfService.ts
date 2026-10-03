@@ -55,8 +55,8 @@ export type UploadDocumentInput = {
 export const MAX_PDF_BYTES = 500 * 1024 * 1024;
 
 function uploadWithProgress(path: string, token: string, file: File, onProgress?: (p: number) => void) {
-  const base = import.meta.env.VITE_SUPABASE_URL as string;
-  const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
+  const base = import.meta.env["VITE_SUPABASE_URL"] as string;
+  const key = import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] as string;
   const encoded = path.split("/").map(encodeURIComponent).join("/");
   const url = `${base}/storage/v1/object/upload/sign/${PDF_BUCKET}/${encoded}?token=${encodeURIComponent(token)}`;
   return new Promise<void>((resolve, reject) => {
