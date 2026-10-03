@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { formatFileSize } from "@/lib/format";
-import { deleteDocument, listDocuments, uploadDocument } from "@/services/pdfService";
+import { MAX_PDF_BYTES, deleteDocument, listDocuments, uploadDocument } from "@/services/pdfService";
 import type { PdfDocument } from "@/services/types";
 
 export const Route = createFileRoute("/admin")({
@@ -107,8 +107,13 @@ function AdminContent({ password }: { password: string }) {
     queryFn: listDocuments,
   });
 
+  const [progress, setProgress] = useState<number | null>(null);
   const uploadMutation = useMutation({
-    mutationFn: () => uploadDocument({ password, title, description, file: file!, thumbnail }),
+    mutationFn: () => {
+      setProgress(0);
+      return uploadDocument({ password, title, description, file: file!, thumbnail, onProgress: setProgress });
+    },
+    onSettled: () => setProgress(null),
     onSuccess: () => {
       toast.success("Dokumen berhasil ditambahkan.");
       setTitle("");
@@ -135,6 +140,10 @@ function AdminContent({ password }: { password: string }) {
     event.preventDefault();
     if (!file) {
       toast.error("Pilih file PDF terlebih dahulu.");
+      return;
+    }
+    if (file.size > MAX_PDF_BYTES) {
+      toast.error(`File terlalu besar (${formatFileSize(file.size)}). Maksimal 500 MB.`);
       return;
     }
     if (!title.trim()) {
@@ -186,9 +195,22 @@ function AdminContent({ password }: { password: string }) {
               onChange={(e) => setThumbnail(e.target.files?.[0] ?? null)}
             />
           </div>
+          <p className="text-xs text-muted-foreground">
+            Maksimal 500 MB per PDF{file ? ` · dipilih ${formatFileSize(file.size)}` : ""}
+          </p>
+          {progress !== null && (
+            <div className="space-y-1" aria-live="polite">
+              <div className="h-2 overflow-hidden rounded-full bg-muted">
+                <div className="h-full bg-primary transition-[width] duration-200" style={{ width: `${progress}%` }} />
+              </div>
+              <p className="text-right text-xs tabular-nums text-muted-foreground">
+                {progress < 100 ? `Mengunggah ${progress}%` : "Menyimpan dokumen..."}
+              </p>
+            </div>
+          )}
           <Button type="submit" disabled={uploadMutation.isPending} className="w-full gap-2">
             <Upload className="size-4" />
-            {uploadMutation.isPending ? "Mengunggah..." : "Simpan dokumen"}
+            {uploadMutation.isPending ? `Mengunggah${progress !== null ? ` ${progress}%` : "..."}` : "Simpan dokumen"}
           </Button>
         </form>
 

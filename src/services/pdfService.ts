@@ -49,9 +49,43 @@ export type UploadDocumentInput = {
   description?: string;
   file: File;
   thumbnail?: File | null;
+  onProgress?: (percent: number) => void;
 };
 
+export const MAX_PDF_BYTES = 500 * 1024 * 1024;
+
+function uploadWithProgress(path: string, token: string, file: File, onProgress?: (p: number) => void) {
+  const base = import.meta.env.VITE_SUPABASE_URL as string;
+  const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
+  const encoded = path.split("/").map(encodeURIComponent).join("/");
+  const url = `${base}/storage/v1/object/upload/sign/${PDF_BUCKET}/${encoded}?token=${encodeURIComponent(token)}`;
+  return new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url);
+    xhr.setRequestHeader("apikey", key);
+    xhr.setRequestHeader("content-type", "application/pdf");
+    xhr.setRequestHeader("x-upsert", "false");
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress?.(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) return resolve();
+      let msg = `Unggah gagal (${xhr.status}).`;
+      try {
+        const body = JSON.parse(xhr.responseText);
+        if (body?.message) msg = body.message;
+      } catch {
+        /* ignore */
+      }
+      reject(new Error(msg));
+    };
+    xhr.onerror = () => reject(new Error("Koneksi terputus saat mengunggah."));
+    xhr.send(file);
+  });
+}
+
 export async function uploadDocument(input: UploadDocumentInput): Promise<void> {
+  if (input.file.size > MAX_PDF_BYTES) throw new Error("Ukuran PDF maksimal 500 MB.");
   const { createUploadUrls, finalizeUpload } = await import("@/lib/admin.functions");
   const urls = await createUploadUrls({
     data: {
@@ -60,10 +94,7 @@ export async function uploadDocument(input: UploadDocumentInput): Promise<void> 
       thumbName: input.thumbnail?.name ?? null,
     },
   });
-  const up = await supabase.storage
-    .from(PDF_BUCKET)
-    .uploadToSignedUrl(urls.filePath, urls.token, input.file, { contentType: "application/pdf" });
-  if (up.error) throw new Error(up.error.message);
+  await uploadWithProgress(urls.filePath, urls.token, input.file, input.onProgress);
 
   let thumbnailPath: string | null = null;
   if (input.thumbnail && urls.thumb) {
