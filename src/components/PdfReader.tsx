@@ -58,7 +58,15 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
   const pageRef = useRef(page);
   pageRef.current = page;
   const renderWidth = width ? Math.round(Math.min(width, 1200)) : 0;
-  const [emblaRef, embla] = useEmblaCarousel({ align: "start", containScroll: false, watchDrag: scale <= 1 ? (_, event) => !(event instanceof TouchEvent && event.touches.length > 1) : false });
+  const [rtl, setRtl] = useState(false);
+  const directionKey = `pdf-reader-direction:${doc.id}`;
+  useEffect(() => { setRtl(localStorage.getItem(directionKey) === "rtl"); }, [directionKey]);
+  const toggleDirection = () => setRtl((value) => {
+    const next = !value;
+    localStorage.setItem(directionKey, next ? "rtl" : "ltr");
+    return next;
+  });
+  const [emblaRef, embla] = useEmblaCarousel({ direction: rtl ? "rtl" : "ltr", align: "start", containScroll: false, watchDrag: scale <= 1 ? (_, event) => !(event instanceof TouchEvent && event.touches.length > 1) : false });
 
   const { data: fileUrl, isLoading, isError } = useQuery({
     queryKey: ["pdf-url", doc.file_path, reloadKey],
@@ -90,7 +98,10 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
     if (!embla) return;
     const selected = () => setPage(embla.selectedScrollSnap() + 1);
     embla.on("select", selected);
-    return () => { embla.off("select", selected); };
+    // Keep the current page after the reading direction changes.
+    const keepPage = () => embla.scrollTo(pageRef.current - 1, true);
+    embla.on("reInit", keepPage);
+    return () => { embla.off("select", selected); embla.off("reInit", keepPage); };
   }, [embla]);
 
   useEffect(() => {
@@ -317,7 +328,7 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
     if (event.touches.length > 0) return;
     tapRef.current = null;
     if (scale > 1 && Math.abs(overshoot) > 70) {
-      goTo(overshoot > 0 ? page - 1 : page + 1);
+      goTo((overshoot > 0) !== rtl ? page - 1 : page + 1);
       return;
     }
     if (!tap || tap.moved || tap.multi || Date.now() - tap.time > 250) return;
@@ -352,7 +363,7 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
           </div>
         ) : (
           <Document file={fileUrl} onLoadSuccess={onLoadSuccess} onLoadError={() => setError(true)} onSourceError={() => setError(true)} loading={<Skeleton className="h-[65vh] w-full" />} error={<div />}>
-            <div ref={emblaRef} className="h-full overflow-hidden">
+            <div ref={emblaRef} dir={rtl ? "rtl" : "ltr"} className="h-full overflow-hidden">
               <div className="flex h-full items-start">
                  {Array.from({ length: numPages }, (_, index) => (
                   <div key={index} className="h-full min-w-0 shrink-0 grow-0 basis-full overflow-hidden">
@@ -370,7 +381,7 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
           </Document>
         )}
       </div>
-      <PageNavigation page={page} totalPages={numPages} onPrev={() => goTo(page - 1)} onNext={() => goTo(page + 1)} onJump={goTo} zoom={Math.round(scale * 100)} onZoomIn={() => changeZoom(scale + .25)} onZoomOut={() => changeZoom(scale - .25)} onFitWidth={() => changeZoom(1)} />
+      <PageNavigation page={page} totalPages={numPages} onPrev={() => goTo(page - 1)} onNext={() => goTo(page + 1)} onJump={goTo} zoom={Math.round(scale * 100)} onZoomIn={() => changeZoom(scale + .25)} onZoomOut={() => changeZoom(scale - .25)} onFitWidth={() => changeZoom(1)} rtl={rtl} onToggleDirection={toggleDirection} />
     </div>
   );
 }

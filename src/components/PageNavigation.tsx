@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronLeft, ChevronRight, Home, Library, Menu, MoveHorizontal, ZoomIn, ZoomOut } from "lucide-react";
+import { ArrowLeftRight, ChevronDown, ChevronLeft, ChevronRight, Home, Library, Menu, MoveHorizontal, ZoomIn, ZoomOut } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,8 @@ export function PageNavigation({
   onZoomIn,
   onZoomOut,
   onFitWidth,
+  rtl,
+  onToggleDirection,
 }: {
   page: number;
   totalPages: number;
@@ -23,6 +25,8 @@ export function PageNavigation({
   onZoomIn: () => void;
   onZoomOut: () => void;
   onFitWidth: () => void;
+  rtl: boolean;
+  onToggleDirection: () => void;
 }) {
   const [draft, setDraft] = useState(String(page));
   const [expanded, setExpanded] = useState(false);
@@ -36,12 +40,13 @@ export function PageNavigation({
     <nav aria-label="Navigasi halaman PDF" className="reader-nav-bottom pointer-events-none fixed inset-x-2 z-40 mx-auto flex max-w-3xl flex-col items-center gap-2 sm:inset-x-4">
       {expanded && <div id="reader-controls" className="pointer-events-auto w-full rounded-lg border border-border bg-background/95 text-foreground shadow-lg backdrop-blur-md">
       <div className="flex items-center justify-end gap-1 border-b border-border px-2 py-1.5">
+        <Button variant="ghost" size="sm" onClick={onToggleDirection} aria-label={`Arah membaca: ${rtl ? "kanan ke kiri" : "kiri ke kanan"}. Ketuk untuk mengubah.`} title="Arah membaca" className="h-9 gap-1 px-2 text-xs"><ArrowLeftRight className="size-4" /> {rtl ? "Kanan → Kiri" : "Kiri → Kanan"}</Button>
         <span className="mr-auto text-xs text-muted-foreground tabular-nums">Zoom {zoom}%</span>
         <Button variant="ghost" size="icon" aria-label="Perkecil" title="Perkecil" onClick={onZoomOut} className="size-9"><ZoomOut className="size-4" /></Button>
         <Button variant="ghost" size="icon" aria-label="Perbesar" title="Perbesar" onClick={onZoomIn} className="size-9"><ZoomIn className="size-4" /></Button>
         <Button variant="ghost" size="sm" onClick={onFitWidth} title="Fit Layar" className="h-9 gap-1"><MoveHorizontal className="size-4" /> Fit Layar</Button>
       </div>
-      <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+      <div className={`flex items-center justify-between gap-2 px-2 py-1.5 ${rtl ? "flex-row-reverse" : ""}`}>
         <Button asChild variant="ghost" size="icon" className="size-9 shrink-0">
           <Link to="/" aria-label="Ke Beranda" title="Beranda"><Home className="size-5" /></Link>
         </Button>
@@ -53,7 +58,7 @@ export function PageNavigation({
           className="h-10 gap-1 px-2 disabled:opacity-40"
           aria-label="Halaman sebelumnya"
         >
-          <ChevronLeft className="size-5" /> <span className="hidden sm:inline">Sebelumnya</span>
+          {rtl ? <ChevronRight className="size-5" /> : <ChevronLeft className="size-5" />} <span className="hidden sm:inline">Sebelumnya</span>
         </Button>
         <label className="flex items-center gap-2 text-sm tabular-nums">
           <span className="sr-only">Nomor halaman</span>
@@ -69,7 +74,7 @@ export function PageNavigation({
           aria-label="Halaman berikutnya"
         >
           <span className="hidden sm:inline">Berikutnya</span>
-          <ChevronRight className="size-5" />
+          {rtl ? <ChevronLeft className="size-5" /> : <ChevronRight className="size-5" />}
         </Button>
         <Button asChild variant="ghost" size="icon" className="size-9 shrink-0">
           <Link to="/library" aria-label="Ke Library" title="Library"><Library className="size-5" /></Link>
