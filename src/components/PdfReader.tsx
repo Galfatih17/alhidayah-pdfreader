@@ -57,6 +57,11 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
   const [restored, setRestored] = useState(initialPage != null);
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [urls, setUrls] = useState<Record<number, string>>({});
+  const [zoomPage, setZoomPage] = useState(initialPage ?? 1);
+  const zoomPageRef = useRef(zoomPage);
+  zoomPageRef.current = zoomPage;
+  const [landscape, setLandscape] = useState(false);
+  const [rotateFallback, setRotateFallback] = useState(false);
   const pageRef = useRef(page);
   pageRef.current = page;
   const renderWidth = width ? Math.round(Math.min(width, 1200)) : 0;
@@ -98,19 +103,65 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
 
   useEffect(() => {
     if (!embla) return;
-    const selected = () => {
-      if (pageTransitionRef.current) {
-        clearTimeout(pageTransitionRef.current);
-        pageTransitionRef.current = null;
+    const selected = () => setPage(embla.selectedScrollSnap() + 1);
+    const settled = () => {
+      const current = embla.selectedScrollSnap() + 1;
+      if (current !== zoomPageRef.current) {
+        setScale(1);
+        setOffset({ x: 0, y: 0 });
+        setZoomPage(current);
       }
-      setPage(embla.selectedScrollSnap() + 1);
     };
     embla.on("select", selected);
+    embla.on("settle", settled);
     // Keep the current page after the reading direction changes.
     const keepPage = () => embla.scrollTo(pageRef.current - 1, true);
     embla.on("reInit", keepPage);
-    return () => { embla.off("select", selected); embla.off("reInit", keepPage); };
+    return () => { embla.off("select", selected); embla.off("settle", settled); embla.off("reInit", keepPage); };
   }, [embla]);
+
+  // The page that carries the zoom transform; it only follows `page` while not zoomed,
+  // so a zoomed page keeps its zoom while sliding out and the new page enters at fit.
+  useEffect(() => { if (scale === 1) setZoomPage(page); }, [page, scale]);
+
+  // Landscape reading: hardware lock where supported, otherwise rotate the reader view.
+  useEffect(() => { setLandscape(localStorage.getItem("pdf-reader-orientation") === "landscape"); }, []);
+  useEffect(() => {
+    type LockableOrientation = ScreenOrientation & { lock?: (o: string) => Promise<void>; unlock?: () => void };
+    const orientation = (typeof screen !== "undefined" ? screen.orientation : undefined) as LockableOrientation | undefined;
+    if (!landscape) {
+      setRotateFallback(false);
+      try { orientation?.unlock?.(); } catch { /* ignore */ }
+      return;
+    }
+    let cancelled = false;
+    const lock = async () => {
+      try {
+        if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen().catch(() => undefined);
+        }
+        if (!orientation?.lock) throw new Error("unsupported");
+        await orientation.lock("landscape");
+        if (!cancelled) setRotateFallback(false);
+      } catch {
+        if (!cancelled) setRotateFallback(window.innerHeight > window.innerWidth);
+      }
+    };
+    void lock();
+    const onResize = () => { if (!cancelled) setRotateFallback((v) => v && window.innerHeight > window.innerWidth); };
+    window.addEventListener("resize", onResize);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("resize", onResize);
+      try { orientation?.unlock?.(); } catch { /* ignore */ }
+      if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+    };
+  }, [landscape]);
+  const toggleOrientation = () => setLandscape((value) => {
+    const next = !value;
+    localStorage.setItem("pdf-reader-orientation", next ? "landscape" : "portrait");
+    return next;
+  });
 
   useEffect(() => {
     if (embla && restored && numPages) embla.scrollTo(Math.max(0, Math.min(page - 1, numPages - 1)), true);
@@ -222,30 +273,15 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
     return () => { cancelled = true; };
   }, [pdf]);
 
+  // Slide straight to the target page. A zoomed page slides out still zoomed;
+  // the incoming page arrives at fit scale and zoom resets once the slide settles.
   const goTo = (value: number) => {
     if (value < 1 || value > numPages) return;
-    if (pageTransitionRef.current) {
-      clearTimeout(pageTransitionRef.current);
-      pageTransitionRef.current = null;
-    }
-    // Settle the enlarged page before moving the carousel. Otherwise the
-    // enlarged image snaps back mid-swipe and the next page briefly inherits its zoom.
-    if (scale > 1 && value !== page) {
-      setPinching(false);
-      setPanning(false);
-      setScale(1);
-      setOffset({ x: 0, y: 0 });
-      pageTransitionRef.current = setTimeout(() => {
-        pageTransitionRef.current = null;
-        if (embla) embla.scrollTo(value - 1);
-        else setPage(value);
-      }, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 180);
-      return;
-    }
-    setScale(1);
-    setOffset({ x: 0, y: 0 });
+    setPinching(false);
+    setPanning(false);
+    if (scale <= 1) { setScale(1); setOffset({ x: 0, y: 0 }); }
     if (embla) embla.scrollTo(value - 1);
-    else setPage(value);
+    else { setPage(value); setScale(1); setOffset({ x: 0, y: 0 }); }
   };
   const constrainedOffset = (next: { x: number; y: number }, zoom: number) => {
     const viewport = pageViewportRef.current;
@@ -375,7 +411,7 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
   };
 
   return (
-    <div className="relative h-dvh overflow-hidden bg-reader">
+    <div className={`relative overflow-hidden bg-reader ${rotateFallback ? "reader-rotated" : "h-dvh"}`}>
       <PdfToolbar pdfId={doc.id} pageNumber={page} title={doc.title} hasOutline={outline.length > 0} onOpenOutline={() => setOutlineOpen(true)} />
       <OutlineSheet open={outlineOpen} onOpenChange={setOutlineOpen} outline={outline} onSelect={goTo} />
       <div ref={containerRef} className="reader-stage mx-auto w-full overflow-hidden pt-[calc(env(safe-area-inset-top,0px)+3rem)]">
@@ -400,7 +436,7 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
                      <div key={index} className="h-full min-w-0 shrink-0 grow-0 basis-full overflow-hidden">
                      {(
                        <div ref={index + 1 === page ? pageViewportRef : null} className={`pdf-page-canvas h-full w-full overflow-hidden ${scale > 1 ? "cursor-grab touch-none active:cursor-grabbing" : "overflow-y-auto touch-pan-y"}`} onTouchStart={index + 1 === page ? onTouchStart : undefined} onTouchMove={index + 1 === page ? onTouchMove : undefined} onTouchEnd={index + 1 === page ? onTouchEnd : undefined} onTouchCancel={index + 1 === page ? onTouchEnd : undefined} onPointerDown={index + 1 === page && scale > 1 ? (event) => { if (event.pointerType !== "mouse") return; event.currentTarget.setPointerCapture(event.pointerId); dragRef.current = { x: event.clientX, y: event.clientY, offset }; setPanning(true); } : undefined} onPointerMove={index + 1 === page && scale > 1 ? (event) => { if (event.pointerType !== "mouse" || !dragRef.current) return; setOffset(constrainedOffset({ x: dragRef.current.offset.x + event.clientX - dragRef.current.x, y: dragRef.current.offset.y + event.clientY - dragRef.current.y }, scale)); } : undefined} onPointerUp={() => { dragRef.current = null; setPanning(false); }} onPointerCancel={() => { dragRef.current = null; setPanning(false); }} onDoubleClick={index + 1 === page ? (event) => { if (Date.now() - lastTouchAtRef.current > 800) toggleZoomAt(event.clientX, event.clientY); } : undefined}>
-                         <div ref={index + 1 === page ? pageContentRef : null} className={`mx-auto w-max origin-top-left ${pinching || panning ? "" : "transition-transform duration-180 ease-out motion-reduce:transition-none"}`} style={index + 1 === page ? { transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})` } : undefined}>
+                         <div ref={index + 1 === page ? pageContentRef : null} className={`mx-auto w-max origin-top-left ${pinching || panning || zoomPage !== page ? "" : "transition-transform duration-180 ease-out motion-reduce:transition-none"}`} style={index + 1 === zoomPage ? { transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})` } : undefined}>
                             <CachedPdfPage number={index + 1} width={renderWidth} url={urls[index + 1]} />
                         </div>
                       </div>
@@ -412,7 +448,7 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
           </Document>
         )}
       </div>
-      <PageNavigation page={page} totalPages={numPages} onPrev={() => goTo(page - 1)} onNext={() => goTo(page + 1)} onJump={goTo} zoom={Math.round(scale * 100)} onZoomIn={() => changeZoom(scale + .25)} onZoomOut={() => changeZoom(scale - .25)} onFitWidth={() => changeZoom(1)} rtl={rtl} onToggleDirection={toggleDirection} />
+      <PageNavigation page={page} totalPages={numPages} onPrev={() => goTo(page - 1)} onNext={() => goTo(page + 1)} onJump={goTo} zoom={Math.round(scale * 100)} onZoomIn={() => changeZoom(scale + .25)} onZoomOut={() => changeZoom(scale - .25)} onFitWidth={() => changeZoom(1)} rtl={rtl} onToggleDirection={toggleDirection} landscape={landscape} onToggleOrientation={toggleOrientation} />
     </div>
   );
 }
