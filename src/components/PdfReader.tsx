@@ -98,7 +98,13 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
 
   useEffect(() => {
     if (!embla) return;
-    const selected = () => setPage(embla.selectedScrollSnap() + 1);
+    const selected = () => {
+      if (pageTransitionRef.current) {
+        clearTimeout(pageTransitionRef.current);
+        pageTransitionRef.current = null;
+      }
+      setPage(embla.selectedScrollSnap() + 1);
+    };
     embla.on("select", selected);
     // Keep the current page after the reading direction changes.
     const keepPage = () => embla.scrollTo(pageRef.current - 1, true);
@@ -233,7 +239,7 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
         pageTransitionRef.current = null;
         if (embla) embla.scrollTo(value - 1);
         else setPage(value);
-      }, 180);
+      }, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 180);
       return;
     }
     setScale(1);
