@@ -41,6 +41,7 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
   const pageContentRef = useRef<HTMLDivElement>(null);
   const pinchRef = useRef<{ distance: number; scale: number; offset: { x: number; y: number }; center: { x: number; y: number } } | null>(null);
   const dragRef = useRef<{ x: number; y: number; offset: { x: number; y: number } } | null>(null);
+  const pageTransitionRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [page, setPage] = useState(initialPage ?? 1);
   const [numPages, setNumPages] = useState(doc.total_pages ?? 0);
   const [scale, setScale] = useState(1);
@@ -48,6 +49,7 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
   const [outline, setOutline] = useState<OutlineNode[]>([]);
   const [outlineOpen, setOutlineOpen] = useState(false);
   const [pinching, setPinching] = useState(false);
+  const [panning, setPanning] = useState(false);
   const [width, setWidth] = useState(0);
   const [progressPercent, setProgressPercent] = useState<number | null>(0);
   const [error, setError] = useState(false);
@@ -107,6 +109,10 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
   useEffect(() => {
     if (embla && restored && numPages) embla.scrollTo(Math.max(0, Math.min(page - 1, numPages - 1)), true);
   }, [embla, restored, numPages]);
+
+  useEffect(() => () => {
+    if (pageTransitionRef.current) clearTimeout(pageTransitionRef.current);
+  }, []);
 
   const unsavedRef = useRef<{ currentPage: number; totalPages: number } | null>(null);
   const flushProgress = useCallback(() => {
@@ -212,10 +218,28 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
 
   const goTo = (value: number) => {
     if (value < 1 || value > numPages) return;
+    if (pageTransitionRef.current) {
+      clearTimeout(pageTransitionRef.current);
+      pageTransitionRef.current = null;
+    }
+    // Settle the enlarged page before moving the carousel. Otherwise the
+    // enlarged image snaps back mid-swipe and the next page briefly inherits its zoom.
+    if (scale > 1 && value !== page) {
+      setPinching(false);
+      setPanning(false);
+      setScale(1);
+      setOffset({ x: 0, y: 0 });
+      pageTransitionRef.current = setTimeout(() => {
+        pageTransitionRef.current = null;
+        if (embla) embla.scrollTo(value - 1);
+        else setPage(value);
+      }, 180);
+      return;
+    }
     setScale(1);
     setOffset({ x: 0, y: 0 });
-    setPage(value);
-    embla?.scrollTo(value - 1);
+    if (embla) embla.scrollTo(value - 1);
+    else setPage(value);
   };
   const constrainedOffset = (next: { x: number; y: number }, zoom: number) => {
     const viewport = pageViewportRef.current;
@@ -294,10 +318,11 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
       if (!center) return;
       pinchRef.current = { distance: distance(event.touches), scale, offset, center };
       dragRef.current = null;
+      setPanning(false);
       setPinching(true);
     } else if (event.touches.length === 1 && scale > 1) {
       const touch = event.touches.item(0);
-      if (touch) dragRef.current = { x: touch.clientX, y: touch.clientY, offset };
+      if (touch) { dragRef.current = { x: touch.clientX, y: touch.clientY, offset }; setPanning(true); }
     }
   };
   const onTouchMove = (event: React.TouchEvent) => {
@@ -324,7 +349,7 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
     lastTouchAtRef.current = Date.now();
     const overshoot = overshootRef.current;
     const tap = tapRef.current;
-    pinchRef.current = null; dragRef.current = null; overshootRef.current = 0; setPinching(false);
+    pinchRef.current = null; dragRef.current = null; overshootRef.current = 0; setPinching(false); setPanning(false);
     if (event.touches.length > 0) return;
     tapRef.current = null;
     if (scale > 1 && Math.abs(overshoot) > 70) {
@@ -366,10 +391,10 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
             <div ref={emblaRef} dir={rtl ? "rtl" : "ltr"} className="h-full overflow-hidden">
               <div className="flex h-full items-start">
                  {Array.from({ length: numPages }, (_, index) => (
-                  <div key={index} className="h-full min-w-0 shrink-0 grow-0 basis-full overflow-hidden">
+                     <div key={index} className="h-full min-w-0 shrink-0 grow-0 basis-full overflow-hidden">
                      {(
-                      <div ref={index + 1 === page ? pageViewportRef : null} className={`pdf-page-canvas h-full w-full overflow-hidden ${scale > 1 ? "cursor-grab touch-none active:cursor-grabbing" : "overflow-y-auto touch-pan-y"}`} onTouchStart={index + 1 === page ? onTouchStart : undefined} onTouchMove={index + 1 === page ? onTouchMove : undefined} onTouchEnd={index + 1 === page ? onTouchEnd : undefined} onTouchCancel={index + 1 === page ? onTouchEnd : undefined} onPointerDown={index + 1 === page && scale > 1 ? (event) => { if (event.pointerType !== "mouse") return; event.currentTarget.setPointerCapture(event.pointerId); dragRef.current = { x: event.clientX, y: event.clientY, offset }; } : undefined} onPointerMove={index + 1 === page && scale > 1 ? (event) => { if (event.pointerType !== "mouse" || !dragRef.current) return; setOffset(constrainedOffset({ x: dragRef.current.offset.x + event.clientX - dragRef.current.x, y: dragRef.current.offset.y + event.clientY - dragRef.current.y }, scale)); } : undefined} onPointerUp={() => { dragRef.current = null; }} onDoubleClick={index + 1 === page ? (event) => { if (Date.now() - lastTouchAtRef.current > 800) toggleZoomAt(event.clientX, event.clientY); } : undefined}>
-                        <div ref={index + 1 === page ? pageContentRef : null} className={`mx-auto w-max origin-top-left ${pinching || scale > 1 ? "" : "transition-transform duration-150"}`} style={index + 1 === page ? { transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})` } : undefined}>
+                       <div ref={index + 1 === page ? pageViewportRef : null} className={`pdf-page-canvas h-full w-full overflow-hidden ${scale > 1 ? "cursor-grab touch-none active:cursor-grabbing" : "overflow-y-auto touch-pan-y"}`} onTouchStart={index + 1 === page ? onTouchStart : undefined} onTouchMove={index + 1 === page ? onTouchMove : undefined} onTouchEnd={index + 1 === page ? onTouchEnd : undefined} onTouchCancel={index + 1 === page ? onTouchEnd : undefined} onPointerDown={index + 1 === page && scale > 1 ? (event) => { if (event.pointerType !== "mouse") return; event.currentTarget.setPointerCapture(event.pointerId); dragRef.current = { x: event.clientX, y: event.clientY, offset }; setPanning(true); } : undefined} onPointerMove={index + 1 === page && scale > 1 ? (event) => { if (event.pointerType !== "mouse" || !dragRef.current) return; setOffset(constrainedOffset({ x: dragRef.current.offset.x + event.clientX - dragRef.current.x, y: dragRef.current.offset.y + event.clientY - dragRef.current.y }, scale)); } : undefined} onPointerUp={() => { dragRef.current = null; setPanning(false); }} onPointerCancel={() => { dragRef.current = null; setPanning(false); }} onDoubleClick={index + 1 === page ? (event) => { if (Date.now() - lastTouchAtRef.current > 800) toggleZoomAt(event.clientX, event.clientY); } : undefined}>
+                         <div ref={index + 1 === page ? pageContentRef : null} className={`mx-auto w-max origin-top-left ${pinching || panning ? "" : "transition-transform duration-180 ease-out motion-reduce:transition-none"}`} style={index + 1 === page ? { transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})` } : undefined}>
                             <CachedPdfPage number={index + 1} width={renderWidth} url={urls[index + 1]} />
                         </div>
                       </div>
