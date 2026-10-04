@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { House, ListTree } from "lucide-react";
+import { House, ListTree, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BookmarkButton } from "./BookmarkButton";
 
@@ -9,12 +9,16 @@ export function PdfToolbar({
   title,
   hasOutline,
   onOpenOutline,
+  landscape,
+  onToggleOrientation,
 }: {
   pdfId: string;
   pageNumber: number;
   title: string;
   hasOutline: boolean;
   onOpenOutline: () => void;
+  landscape: boolean;
+  onToggleOrientation: () => void;
 }) {
   return (
     <header className="absolute inset-x-0 top-0 z-40 border-b border-border/40 bg-background/70 pt-[env(safe-area-inset-top,0px)] text-reader-foreground backdrop-blur-sm">
@@ -36,7 +40,7 @@ export function PdfToolbar({
           </Button>
         </div>
         <span className="min-w-0 truncate text-center text-xs font-medium text-muted-foreground" title={title}>{title}</span>
-        <div className="flex justify-end"><BookmarkButton pdfId={pdfId} pageNumber={pageNumber} /></div>
+        <div className="flex items-center justify-end"><Button variant="ghost" size="icon" className={`size-10 ${landscape ? "text-primary" : ""}`} onClick={onToggleOrientation} aria-pressed={landscape} aria-label={landscape ? "Ubah ke potret" : "Ubah ke lanskap"} title={landscape ? "Potret" : "Lanskap"}><RotateCw className="size-5" /></Button><BookmarkButton pdfId={pdfId} pageNumber={pageNumber} /></div>
       </div>
     </header>
   );

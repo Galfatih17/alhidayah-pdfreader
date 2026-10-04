@@ -165,7 +165,7 @@
 
 :root {
   --app-nav-offset: calc(env(safe-area-inset-bottom, 0px) + 1rem);
-  --reader-nav-offset: calc(env(safe-area-inset-bottom, 0px) + 4.5rem);
+  --reader-nav-offset: calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
 }
 
 .app-nav-bottom {
@@ -187,7 +187,7 @@
 @media (display-mode: standalone) {
   :root {
     --app-nav-offset: calc(env(safe-area-inset-bottom, 0px) + 4.5rem);
-    --reader-nav-offset: calc(env(safe-area-inset-bottom, 0px) + 4.5rem);
+    --reader-nav-offset: calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
   }
   .app-shell {
     padding-bottom: calc(10.5rem + env(safe-area-inset-bottom, 0px));

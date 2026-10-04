@@ -1,4 +1,4 @@
-import { ArrowLeftRight, ChevronDown, ChevronLeft, ChevronRight, Home, Library, Menu, MoveHorizontal, RotateCw, ZoomIn, ZoomOut } from "lucide-react";
+import { ArrowLeftRight, ChevronDown, ChevronLeft, ChevronRight, Home, Library, Menu, MoveHorizontal, ZoomIn, ZoomOut } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -15,8 +15,6 @@ export function PageNavigation({
   onFitWidth,
   rtl,
   onToggleDirection,
-  landscape,
-  onToggleOrientation,
 }: {
   page: number;
   totalPages: number;
@@ -29,8 +27,6 @@ export function PageNavigation({
   onFitWidth: () => void;
   rtl: boolean;
   onToggleDirection: () => void;
-  landscape: boolean;
-  onToggleOrientation: () => void;
 }) {
   const [draft, setDraft] = useState(String(page));
   const [expanded, setExpanded] = useState(false);
@@ -45,7 +41,6 @@ export function PageNavigation({
       {expanded && <div id="reader-controls" className="pointer-events-auto w-full rounded-lg border border-border bg-background/95 text-foreground shadow-lg backdrop-blur-md">
       <div className="flex items-center justify-end gap-1 border-b border-border px-2 py-1.5">
         <Button variant="ghost" size="sm" onClick={onToggleDirection} aria-label={`Arah membaca: ${rtl ? "kanan ke kiri" : "kiri ke kanan"}. Ketuk untuk mengubah.`} title="Arah membaca" className="h-9 gap-1 px-2 text-xs"><ArrowLeftRight className="size-4" /> {rtl ? "Kanan → Kiri" : "Kiri → Kanan"}</Button>
-        <Button variant="ghost" size="sm" onClick={onToggleOrientation} aria-pressed={landscape} aria-label={`Orientasi: ${landscape ? "lanskap" : "potret"}. Ketuk untuk mengubah.`} title="Orientasi layar" className="h-9 gap-1 px-2 text-xs"><RotateCw className="size-4" /> {landscape ? "Lanskap" : "Potret"}</Button>
         <span className="mr-auto text-xs text-muted-foreground tabular-nums">Zoom {zoom}%</span>
         <Button variant="ghost" size="icon" aria-label="Perkecil" title="Perkecil" onClick={onZoomOut} className="size-9"><ZoomOut className="size-4" /></Button>
         <Button variant="ghost" size="icon" aria-label="Perbesar" title="Perbesar" onClick={onZoomIn} className="size-9"><ZoomIn className="size-4" /></Button>
