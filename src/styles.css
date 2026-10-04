@@ -214,3 +214,18 @@
     height: auto !important;
   }
 }
+
+/* Landscape fallback when the device cannot lock orientation (e.g. iOS). */
+.reader-rotated {
+  position: fixed;
+  top: 0;
+  left: 100vw;
+  width: 100dvh;
+  height: 100vw;
+  transform: rotate(90deg);
+  transform-origin: top left;
+}
+.reader-rotated .reader-nav-bottom,
+.reader-rotated .fixed {
+  position: absolute;
+}
