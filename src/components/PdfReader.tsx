@@ -57,6 +57,11 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
   const [restored, setRestored] = useState(initialPage != null);
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [urls, setUrls] = useState<Record<number, string>>({});
+  const [zoomPage, setZoomPage] = useState(initialPage ?? 1);
+  const zoomPageRef = useRef(zoomPage);
+  zoomPageRef.current = zoomPage;
+  const [landscape, setLandscape] = useState(false);
+  const [rotateFallback, setRotateFallback] = useState(false);
   const pageRef = useRef(page);
   pageRef.current = page;
   const renderWidth = width ? Math.round(Math.min(width, 1200)) : 0;
@@ -98,19 +103,65 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
 
   useEffect(() => {
     if (!embla) return;
-    const selected = () => {
-      if (pageTransitionRef.current) {
-        clearTimeout(pageTransitionRef.current);
-        pageTransitionRef.current = null;
+    const selected = () => setPage(embla.selectedScrollSnap() + 1);
+    const settled = () => {
+      const current = embla.selectedScrollSnap() + 1;
+      if (current !== zoomPageRef.current) {
+        setScale(1);
+        setOffset({ x: 0, y: 0 });
+        setZoomPage(current);
       }
-      setPage(embla.selectedScrollSnap() + 1);
     };
     embla.on("select", selected);
+    embla.on("settle", settled);
     // Keep the current page after the reading direction changes.
     const keepPage = () => embla.scrollTo(pageRef.current - 1, true);
     embla.on("reInit", keepPage);
-    return () => { embla.off("select", selected); embla.off("reInit", keepPage); };
+    return () => { embla.off("select", selected); embla.off("settle", settled); embla.off("reInit", keepPage); };
   }, [embla]);
+
+  // The page that carries the zoom transform; it only follows `page` while not zoomed,
+  // so a zoomed page keeps its zoom while sliding out and the new page enters at fit.
+  useEffect(() => { if (scale === 1) setZoomPage(page); }, [page, scale]);
+
+  // Landscape reading: hardware lock where supported, otherwise rotate the reader view.
+  useEffect(() => { setLandscape(localStorage.getItem("pdf-reader-orientation") === "landscape"); }, []);
+  useEffect(() => {
+    type LockableOrientation = ScreenOrientation & { lock?: (o: string) => Promise<void>; unlock?: () => void };
+    const orientation = (typeof screen !== "undefined" ? screen.orientation : undefined) as LockableOrientation | undefined;
+    if (!landscape) {
+      setRotateFallback(false);
+      try { orientation?.unlock?.(); } catch { /* ignore */ }
+      return;
+    }
+    let cancelled = false;
+    const lock = async () => {
+      try {
+        if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen().catch(() => undefined);
+        }
+        if (!orientation?.lock) throw new Error("unsupported");
+        await orientation.lock("landscape");
+        if (!cancelled) setRotateFallback(false);
+      } catch {
+        if (!cancelled) setRotateFallback(window.innerHeight > window.innerWidth);
+      }
+    };
+    void lock();
+    const onResize = () => { if (!cancelled) setRotateFallback((v) => v && window.innerHeight > window.innerWidth); };
+    window.addEventListener("resize", onResize);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("resize", onResize);
+      try { orientation?.unlock?.(); } catch { /* ignore */ }
+      if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+    };
+  }, [landscape]);
+  const toggleOrientation = () => setLandscape((value) => {
+    const next = !value;
+    localStorage.setItem("pdf-reader-orientation", next ? "landscape" : "portrait");
+    return next;
+  });
 
   useEffect(() => {
     if (embla && restored && numPages) embla.scrollTo(Math.max(0, Math.min(page - 1, numPages - 1)), true);
@@ -222,30 +273,15 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
     return () => { cancelled = true; };
   }, [pdf]);
 
+  // Slide straight to the target page. A zoomed page slides out still zoomed;
+  // the incoming page arrives at fit scale and zoom resets once the slide settles.
   const goTo = (value: number) => {
     if (value < 1 || value > numPages) return;
-    if (pageTransitionRef.current) {
-      clearTimeout(pageTransitionRef.current);
-      pageTransitionRef.current = null;
-    }
-    // Settle the enlarged page before moving the carousel. Otherwise the
-    // enlarged image snaps back mid-swipe and the next page briefly inherits its zoom.
-    if (scale > 1 && value !== page) {
-      setPinching(false);
-      setPanning(false);
-      setScale(1);
-      setOffset({ x: 0, y: 0 });
-      pageTransitionRef.current = setTimeout(() => {
-        pageTransitionRef.current = null;
-        if (embla) embla.scrollTo(value - 1);
-        else setPage(value);
-      }, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 180);
-      return;
-    }
-    setScale(1);
-    setOffset({ x: 0, y: 0 });
+    setPinching(false);
+    setPanning(false);
+    if (scale <= 1) { setScale(1); setOffset({ x: 0, y: 0 }); }
     if (embla) embla.scrollTo(value - 1);
-    else setPage(value);
+    else { setPage(value); setScale(1); setOffset({ x: 0, y: 0 }); }
   };
   const constrainedOffset = (next: { x: number; y: number }, zoom: number) => {
     const viewport = pageViewportRef.current;
