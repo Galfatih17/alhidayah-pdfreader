@@ -341,6 +341,10 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
   };
   // Screen-space movement mapped into the reader's own axes (rotated 90deg in the fallback).
   const toLocal = (dx: number, dy: number) => (rotateFallback ? { x: dy, y: -dx } : { x: dx, y: dy });
+  // Rotated fallback: browsers can't natively scroll a rotated box by touch, so scroll it by hand.
+  const rotScrollRef = useRef<{ x: number; y: number; t: number; v: number } | null>(null);
+  const inertiaRef = useRef(0);
+  useEffect(() => () => cancelAnimationFrame(inertiaRef.current), []);
   const tapRef = useRef<{ x: number; y: number; time: number; moved: boolean; multi: boolean } | null>(null);
   const lastTapRef = useRef<{ x: number; y: number; time: number } | null>(null);
   const overshootRef = useRef(0);
@@ -350,6 +354,8 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
     if (event.touches.length === 1 && firstTouch) tapRef.current = { x: firstTouch.clientX, y: firstTouch.clientY, time: Date.now(), moved: false, multi: false };
     else if (tapRef.current) tapRef.current.multi = true;
     overshootRef.current = 0;
+    cancelAnimationFrame(inertiaRef.current);
+    rotScrollRef.current = rotateFallback && scale <= 1 && event.touches.length === 1 && firstTouch ? { x: firstTouch.clientX, y: firstTouch.clientY, t: performance.now(), v: 0 } : null;
     if (event.touches.length === 2) {
       const first = event.touches.item(0);
       const second = event.touches.item(1);
@@ -368,6 +374,16 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
   const onTouchMove = (event: React.TouchEvent) => {
     const t = event.touches.item(0);
     if (tapRef.current && t && Math.hypot(t.clientX - tapRef.current.x, t.clientY - tapRef.current.y) > 10) tapRef.current.moved = true;
+    const rs = rotScrollRef.current;
+    if (rs && t && event.touches.length === 1 && pageViewportRef.current) {
+      const d = toLocal(t.clientX - rs.x, t.clientY - rs.y);
+      const now = performance.now();
+      if (Math.abs(d.y) >= Math.abs(d.x)) {
+        pageViewportRef.current.scrollTop -= d.y;
+        rs.v = -d.y / Math.max(1, now - rs.t);
+      }
+      rs.x = t.clientX; rs.y = t.clientY; rs.t = now;
+    }
     if (event.touches.length === 2 && pinchRef.current) {
       const { center, offset: start, distance: initialDistance, scale: initialScale } = pinchRef.current;
       if (!initialDistance) return;
@@ -390,6 +406,19 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
     lastTouchAtRef.current = Date.now();
     // Rotated landscape fallback: the carousel can't read rotated swipes, so detect them here.
     const end = event.changedTouches.item(0);
+    const rs = rotScrollRef.current;
+    rotScrollRef.current = null;
+    if (rs && Math.abs(rs.v) > 0.05 && event.touches.length === 0 && performance.now() - rs.t < 100) {
+      let v = rs.v * 16;
+      const step = () => {
+        const viewport = pageViewportRef.current;
+        if (!viewport || Math.abs(v) < 0.5) return;
+        viewport.scrollTop += v;
+        v *= 0.95;
+        inertiaRef.current = requestAnimationFrame(step);
+      };
+      inertiaRef.current = requestAnimationFrame(step);
+    }
     if (rotateFallback && scale <= 1 && tapRef.current && !tapRef.current.multi && end && event.touches.length === 0) {
       const d = toLocal(end.clientX - tapRef.current.x, end.clientY - tapRef.current.y);
       if (Math.abs(d.x) > 60 && Math.abs(d.x) > Math.abs(d.y) * 1.5) {
@@ -444,7 +473,7 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
                  {Array.from({ length: numPages }, (_, index) => (
                      <div key={index} className="h-full min-w-0 shrink-0 grow-0 basis-full overflow-hidden">
                      {(
-                       <div ref={index + 1 === page ? pageViewportRef : null} className={`pdf-page-canvas h-full w-full ${scale > 1 ? "overflow-hidden cursor-grab touch-none active:cursor-grabbing" : `overflow-y-auto overflow-x-hidden overscroll-contain pb-20 ${rotateFallback ? "touch-manipulation" : "touch-pan-y"}`}`} onTouchStart={index + 1 === page ? onTouchStart : undefined} onTouchMove={index + 1 === page ? onTouchMove : undefined} onTouchEnd={index + 1 === page ? onTouchEnd : undefined} onTouchCancel={index + 1 === page ? onTouchEnd : undefined} onPointerDown={index + 1 === page && scale > 1 ? (event) => { if (event.pointerType !== "mouse") return; event.currentTarget.setPointerCapture(event.pointerId); dragRef.current = { x: event.clientX, y: event.clientY, offset }; setPanning(true); } : undefined} onPointerMove={index + 1 === page && scale > 1 ? (event) => { if (event.pointerType !== "mouse" || !dragRef.current) return; setOffset(constrainedOffset({ x: dragRef.current.offset.x + event.clientX - dragRef.current.x, y: dragRef.current.offset.y + event.clientY - dragRef.current.y }, scale)); } : undefined} onPointerUp={() => { dragRef.current = null; setPanning(false); }} onPointerCancel={() => { dragRef.current = null; setPanning(false); }} onDoubleClick={index + 1 === page ? (event) => { if (Date.now() - lastTouchAtRef.current > 800) toggleZoomAt(event.clientX, event.clientY); } : undefined}>
+                       <div ref={index + 1 === page ? pageViewportRef : null} className={`pdf-page-canvas h-full w-full ${scale > 1 ? "overflow-hidden cursor-grab touch-none active:cursor-grabbing" : `overflow-y-auto overflow-x-hidden overscroll-contain pb-20 ${rotateFallback ? "touch-none" : "touch-pan-y"}`}`} onTouchStart={index + 1 === page ? onTouchStart : undefined} onTouchMove={index + 1 === page ? onTouchMove : undefined} onTouchEnd={index + 1 === page ? onTouchEnd : undefined} onTouchCancel={index + 1 === page ? onTouchEnd : undefined} onPointerDown={index + 1 === page && scale > 1 ? (event) => { if (event.pointerType !== "mouse") return; event.currentTarget.setPointerCapture(event.pointerId); dragRef.current = { x: event.clientX, y: event.clientY, offset }; setPanning(true); } : undefined} onPointerMove={index + 1 === page && scale > 1 ? (event) => { if (event.pointerType !== "mouse" || !dragRef.current) return; setOffset(constrainedOffset({ x: dragRef.current.offset.x + event.clientX - dragRef.current.x, y: dragRef.current.offset.y + event.clientY - dragRef.current.y }, scale)); } : undefined} onPointerUp={() => { dragRef.current = null; setPanning(false); }} onPointerCancel={() => { dragRef.current = null; setPanning(false); }} onDoubleClick={index + 1 === page ? (event) => { if (Date.now() - lastTouchAtRef.current > 800) toggleZoomAt(event.clientX, event.clientY); } : undefined}>
                          <div ref={index + 1 === page ? pageContentRef : null} className={`mx-auto w-max origin-top-left ${pinching || panning || zoomPage !== page ? "" : "transition-transform duration-180 ease-out motion-reduce:transition-none"}`} style={index + 1 === zoomPage ? { transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})` } : undefined}>
                             <CachedPdfPage number={index + 1} width={renderWidth} url={urls[index + 1]} />
                         </div>
