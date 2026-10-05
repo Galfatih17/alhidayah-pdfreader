@@ -65,7 +65,18 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
   const [rotateFallback, setRotateFallback] = useState(false);
   const pageRef = useRef(page);
   pageRef.current = page;
-  const renderWidth = width ? Math.round(Math.min(width, 1200)) : 0;
+  // Display width follows the screen instantly (CSS scaling); render width only changes after
+  // resizing settles and in coarse steps, so rotating never triggers a re-render storm.
+  const displayWidth = width ? Math.round(Math.min(width, 1200)) : 0;
+  const [renderWidth, setRenderWidth] = useState(0);
+  useEffect(() => {
+    if (!displayWidth) return;
+    const target = Math.min(1200, Math.ceil(displayWidth / 100) * 100);
+    if (!renderWidth) { setRenderWidth(target); return; }
+    if (target === renderWidth) return;
+    const timer = setTimeout(() => setRenderWidth(target), 400);
+    return () => clearTimeout(timer);
+  }, [displayWidth, renderWidth]);
   const [rtl, setRtl] = useState(false);
   const directionKey = `pdf-reader-direction:${doc.id}`;
   useEffect(() => { setRtl(localStorage.getItem(directionKey) === "rtl"); }, [directionKey]);
@@ -247,17 +258,6 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
   }, [pdf, renderWidth, numPages, doc.id]);
   useEffect(() => () => { Object.values(urlsRef.current).forEach((u) => URL.revokeObjectURL(u)); urlsRef.current = {}; }, [pdf]);
 
-  // Soft fade/settle whenever the orientation or reader size flips, instead of a hard jump.
-  const orientKey = `${landscape}-${rotateFallback}-${width > (typeof window !== "undefined" ? window.innerHeight : 0)}`;
-  const firstOrientRef = useRef(true);
-  useEffect(() => {
-    if (firstOrientRef.current) { firstOrientRef.current = false; return; }
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    containerRef.current?.animate(
-      [{ opacity: 0, transform: "scale(0.97)" }, { opacity: 1, transform: "scale(1)" }],
-      { duration: 320, easing: "cubic-bezier(0.2, 0, 0, 1)" },
-    );
-  }, [orientKey]);
 
   // Read the PDF's built-in outline (table of contents) and resolve each entry to a page number.
   useEffect(() => {
@@ -490,7 +490,7 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
                      {(
                        <div ref={index + 1 === page ? pageViewportRef : null} className={`pdf-page-canvas h-full w-full ${scale > 1 ? "overflow-hidden cursor-grab touch-none active:cursor-grabbing" : `overflow-y-auto overflow-x-hidden overscroll-contain pb-20 ${rotateFallback ? "touch-none" : "touch-pan-y"}`}`} onTouchStart={index + 1 === page ? onTouchStart : undefined} onTouchMove={index + 1 === page ? onTouchMove : undefined} onTouchEnd={index + 1 === page ? onTouchEnd : undefined} onTouchCancel={index + 1 === page ? onTouchEnd : undefined} onPointerDown={index + 1 === page && scale > 1 ? (event) => { if (event.pointerType !== "mouse") return; event.currentTarget.setPointerCapture(event.pointerId); dragRef.current = { x: event.clientX, y: event.clientY, offset }; setPanning(true); } : undefined} onPointerMove={index + 1 === page && scale > 1 ? (event) => { if (event.pointerType !== "mouse" || !dragRef.current) return; setOffset(constrainedOffset({ x: dragRef.current.offset.x + event.clientX - dragRef.current.x, y: dragRef.current.offset.y + event.clientY - dragRef.current.y }, scale)); } : undefined} onPointerUp={() => { dragRef.current = null; setPanning(false); }} onPointerCancel={() => { dragRef.current = null; setPanning(false); }} onDoubleClick={index + 1 === page ? (event) => { if (Date.now() - lastTouchAtRef.current > 800) toggleZoomAt(event.clientX, event.clientY); } : undefined}>
                          <div ref={index + 1 === page ? pageContentRef : null} className={`mx-auto w-max origin-top-left ${pinching || panning || zoomPage !== page ? "" : "transition-transform duration-180 ease-out motion-reduce:transition-none"}`} style={index + 1 === zoomPage ? { transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})` } : undefined}>
-                            <CachedPdfPage number={index + 1} width={renderWidth} url={urls[index + 1]} />
+                            <CachedPdfPage number={index + 1} width={displayWidth} url={urls[index + 1]} />
                         </div>
                       </div>
                     )}
