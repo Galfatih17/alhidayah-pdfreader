@@ -229,3 +229,6 @@
 .reader-rotated .fixed {
   position: absolute;
 }
+
+.pdf-page-canvas { -webkit-overflow-scrolling: touch; scroll-behavior: auto; }
+.reader-rotated { will-change: transform; }
