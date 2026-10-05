@@ -137,9 +137,6 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
     let cancelled = false;
     const lock = async () => {
       try {
-        if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
-          await document.documentElement.requestFullscreen().catch(() => undefined);
-        }
         if (!orientation?.lock) throw new Error("unsupported");
         await orientation.lock("landscape");
         if (!cancelled) setRotateFallback(false);
@@ -154,7 +151,6 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
       cancelled = true;
       window.removeEventListener("resize", onResize);
       try { orientation?.unlock?.(); } catch { /* ignore */ }
-      if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
     };
   }, [landscape]);
   const toggleOrientation = () => setLandscape((value) => {
