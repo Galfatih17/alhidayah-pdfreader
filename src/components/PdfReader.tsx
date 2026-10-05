@@ -57,6 +57,7 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
   const [restored, setRestored] = useState(initialPage != null);
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [urls, setUrls] = useState<Record<number, string>>({});
+  const urlsRef = useRef<Record<number, string>>({});
   const [zoomPage, setZoomPage] = useState(initialPage ?? 1);
   const zoomPageRef = useRef(zoomPage);
   zoomPageRef.current = zoomPage;
@@ -210,9 +211,8 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
   useEffect(() => {
     if (!pdf || !renderWidth || !numPages) return;
     let cancelled = false;
-    const created: string[] = [];
     const done = new Set<number>();
-    setUrls({});
+    // Keep previous images visible (scaled by CSS) until sharper ones replace them: no blank flash.
     const nextPage = () => {
       const current = pageRef.current;
       for (let d = 0; d < numPages; d++) {
@@ -233,16 +233,31 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
           }
           if (cancelled) break;
           const url = URL.createObjectURL(blob);
-          created.push(url);
-          setUrls((prev) => ({ ...prev, [n]: url }));
+          const old = urlsRef.current[n];
+          urlsRef.current = { ...urlsRef.current, [n]: url };
+          setUrls(urlsRef.current);
+          if (old) setTimeout(() => URL.revokeObjectURL(old), 1000);
         } catch {
           if (!cancelled && n === pageRef.current) setError(true);
         }
         if (Math.abs(n - pageRef.current) > 2) await new Promise((r) => setTimeout(r, 40));
       }
     })();
-    return () => { cancelled = true; created.forEach((u) => URL.revokeObjectURL(u)); };
+    return () => { cancelled = true; };
   }, [pdf, renderWidth, numPages, doc.id]);
+  useEffect(() => () => { Object.values(urlsRef.current).forEach((u) => URL.revokeObjectURL(u)); urlsRef.current = {}; }, [pdf]);
+
+  // Soft fade/settle whenever the orientation or reader size flips, instead of a hard jump.
+  const orientKey = `${landscape}-${rotateFallback}-${width > (typeof window !== "undefined" ? window.innerHeight : 0)}`;
+  const firstOrientRef = useRef(true);
+  useEffect(() => {
+    if (firstOrientRef.current) { firstOrientRef.current = false; return; }
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    containerRef.current?.animate(
+      [{ opacity: 0, transform: "scale(0.97)" }, { opacity: 1, transform: "scale(1)" }],
+      { duration: 320, easing: "cubic-bezier(0.2, 0, 0, 1)" },
+    );
+  }, [orientKey]);
 
   // Read the PDF's built-in outline (table of contents) and resolve each entry to a page number.
   useEffect(() => {
