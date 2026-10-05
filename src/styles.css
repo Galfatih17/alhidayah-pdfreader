@@ -232,3 +232,4 @@
 
 .pdf-page-canvas { -webkit-overflow-scrolling: touch; scroll-behavior: auto; }
 .reader-rotated { will-change: transform; }
+.reader-rotated .reader-stage { height: 100%; }
