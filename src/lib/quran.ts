@@ -66,12 +66,12 @@ export async function fetchSurah(n: number): Promise<Ayah[]> {
   }));
 }
 
-export const surahOf = (n: number) => SURAHS[n - 1];
+export const surahOf = (n: number): Surah => SURAHS[n - 1] ?? SURAHS[0]!;
 export const showBismillah = (surah: number) => surah !== 1 && surah !== 9;
 export const BISMILLAH_TEXT = BISMILLAH;
 
 export function toArabicDigits(n: number) {
-  return String(n).replace(/\d/g, (d) => "٠١٢٣٤٥٦٧٨٩"[Number(d)]);
+  return String(n).replace(/\d/g, (d) => "٠١٢٣٤٥٦٧٨٩"[Number(d)] ?? d);
 }
 
 export function juzOfPage(page: number) {
@@ -81,7 +81,7 @@ export function juzOfPage(page: number) {
 }
 
 export function surahOfPage(page: number) {
-  let s = SURAHS[0];
+  let s: Surah = SURAHS[0]!;
   for (const x of SURAHS) if (x.page <= page) s = x;
   return s;
 }
