@@ -244,6 +244,9 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
           }
           if (cancelled) break;
           const url = URL.createObjectURL(blob);
+          // Decode before swapping so the old image stays on screen until the new one is ready.
+          try { const img = new Image(); img.src = url; await img.decode(); } catch { /* show anyway */ }
+          if (cancelled) { URL.revokeObjectURL(url); break; }
           const old = urlsRef.current[n];
           urlsRef.current = { ...urlsRef.current, [n]: url };
           setUrls(urlsRef.current);
