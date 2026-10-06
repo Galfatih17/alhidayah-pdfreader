@@ -13,9 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as BookmarksRouteImport } from './routes/bookmarks'
 import { Route as LibraryRouteImport } from './routes/library'
-import { Route as MushafPageRouteImport } from './routes/mushaf.$page'
 import { Route as ReaderIdRouteImport } from './routes/reader.$id'
-import { Route as SurahIdRouteImport } from './routes/surah.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -37,19 +35,9 @@ const LibraryRoute = LibraryRouteImport.update({
   path: '/library',
   getParentRoute: () => rootRouteImport,
 } as any)
-const MushafPageRoute = MushafPageRouteImport.update({
-  id: '/mushaf/$page',
-  path: '/mushaf/$page',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ReaderIdRoute = ReaderIdRouteImport.update({
   id: '/reader/$id',
   path: '/reader/$id',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SurahIdRoute = SurahIdRouteImport.update({
-  id: '/surah/$id',
-  path: '/surah/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -58,18 +46,14 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRoute
   '/bookmarks': typeof BookmarksRoute
   '/library': typeof LibraryRoute
-  '/mushaf/$page': typeof MushafPageRoute
   '/reader/$id': typeof ReaderIdRoute
-  '/surah/$id': typeof SurahIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/bookmarks': typeof BookmarksRoute
   '/library': typeof LibraryRoute
-  '/mushaf/$page': typeof MushafPageRoute
   '/reader/$id': typeof ReaderIdRoute
-  '/surah/$id': typeof SurahIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -77,38 +61,14 @@ export interface FileRoutesById {
   '/admin': typeof AdminRoute
   '/bookmarks': typeof BookmarksRoute
   '/library': typeof LibraryRoute
-  '/mushaf/$page': typeof MushafPageRoute
   '/reader/$id': typeof ReaderIdRoute
-  '/surah/$id': typeof SurahIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/admin'
-    | '/bookmarks'
-    | '/library'
-    | '/mushaf/$page'
-    | '/reader/$id'
-    | '/surah/$id'
+  fullPaths: '/' | '/admin' | '/bookmarks' | '/library' | '/reader/$id'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/admin'
-    | '/bookmarks'
-    | '/library'
-    | '/mushaf/$page'
-    | '/reader/$id'
-    | '/surah/$id'
-  id:
-    | '__root__'
-    | '/'
-    | '/admin'
-    | '/bookmarks'
-    | '/library'
-    | '/mushaf/$page'
-    | '/reader/$id'
-    | '/surah/$id'
+  to: '/' | '/admin' | '/bookmarks' | '/library' | '/reader/$id'
+  id: '__root__' | '/' | '/admin' | '/bookmarks' | '/library' | '/reader/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -116,9 +76,7 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRoute
   BookmarksRoute: typeof BookmarksRoute
   LibraryRoute: typeof LibraryRoute
-  MushafPageRoute: typeof MushafPageRoute
   ReaderIdRoute: typeof ReaderIdRoute
-  SurahIdRoute: typeof SurahIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -151,25 +109,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LibraryRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/mushaf/$page': {
-      id: '/mushaf/$page'
-      path: '/mushaf/$page'
-      fullPath: '/mushaf/$page'
-      preLoaderRoute: typeof MushafPageRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/reader/$id': {
       id: '/reader/$id'
       path: '/reader/$id'
       fullPath: '/reader/$id'
       preLoaderRoute: typeof ReaderIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/surah/$id': {
-      id: '/surah/$id'
-      path: '/surah/$id'
-      fullPath: '/surah/$id'
-      preLoaderRoute: typeof SurahIdRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -180,9 +124,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRoute,
   BookmarksRoute: BookmarksRoute,
   LibraryRoute: LibraryRoute,
-  MushafPageRoute: MushafPageRoute,
   ReaderIdRoute: ReaderIdRoute,
-  SurahIdRoute: SurahIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
