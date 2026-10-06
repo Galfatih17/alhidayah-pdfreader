@@ -217,24 +217,34 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
     if (doc.total_pages !== total) void updateTotalPages(doc.id, total).catch(() => undefined);
   }, [doc.id, doc.total_pages]);
 
-  // Fill page images: cache hit first, otherwise render once with pdf.js and store.
-  // Order: current page, then outward neighbours, progressively the whole document.
+  // Fill page images around the current page only: cache hit first, otherwise render once
+  // with pdf.js and store. Far pages are released to keep memory and the DOM light.
   useEffect(() => {
     if (!pdf || !renderWidth || !numPages) return;
     let cancelled = false;
     const done = new Set<number>();
-    // Keep previous images visible (scaled by CSS) until sharper ones replace them: no blank flash.
+    const LOAD = 5;
+    const KEEP = 10;
     const nextPage = () => {
       const current = pageRef.current;
-      for (let d = 0; d < numPages; d++) {
+      for (let d = 0; d <= LOAD; d++) {
         for (const n of [current + d, current - d]) if (n >= 1 && n <= numPages && !done.has(n)) return n;
       }
       return 0;
     };
+    const release = () => {
+      const current = pageRef.current;
+      const far = Object.keys(urlsRef.current).map(Number).filter((n) => Math.abs(n - current) > KEEP);
+      if (!far.length) return;
+      const next = { ...urlsRef.current };
+      for (const n of far) { const u = next[n]; delete next[n]; done.delete(n); if (u) setTimeout(() => URL.revokeObjectURL(u), 1000); }
+      urlsRef.current = next;
+      setUrls(next);
+    };
     void (async () => {
       while (!cancelled) {
         const n = nextPage();
-        if (!n) break;
+        if (!n) { release(); await new Promise((r) => setTimeout(r, 150)); continue; }
         done.add(n);
         try {
           let blob = await getCachedPage(doc.id, n, renderWidth);
@@ -254,7 +264,8 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
         } catch {
           if (!cancelled && n === pageRef.current) setError(true);
         }
-        if (Math.abs(n - pageRef.current) > 2) await new Promise((r) => setTimeout(r, 40));
+        // Yield between background pages so swipes and taps stay responsive.
+        if (Math.abs(n - pageRef.current) > 1) await new Promise((r) => setTimeout(r, 16));
       }
     })();
     return () => { cancelled = true; };
@@ -490,7 +501,7 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
               <div className="flex h-full items-start">
                  {Array.from({ length: numPages }, (_, index) => (
                      <div key={index} className="h-full min-w-0 shrink-0 grow-0 basis-full overflow-hidden">
-                     {(
+                     {Math.abs(index + 1 - page) <= 3 && (
                        <div ref={index + 1 === page ? pageViewportRef : null} className={`pdf-page-canvas h-full w-full ${scale > 1 ? "overflow-hidden cursor-grab touch-none active:cursor-grabbing" : `overflow-y-auto overflow-x-hidden overscroll-contain pb-20 ${rotateFallback ? "touch-none" : "touch-pan-y"}`}`} onTouchStart={index + 1 === page ? onTouchStart : undefined} onTouchMove={index + 1 === page ? onTouchMove : undefined} onTouchEnd={index + 1 === page ? onTouchEnd : undefined} onTouchCancel={index + 1 === page ? onTouchEnd : undefined} onPointerDown={index + 1 === page && scale > 1 ? (event) => { if (event.pointerType !== "mouse") return; event.currentTarget.setPointerCapture(event.pointerId); dragRef.current = { x: event.clientX, y: event.clientY, offset }; setPanning(true); } : undefined} onPointerMove={index + 1 === page && scale > 1 ? (event) => { if (event.pointerType !== "mouse" || !dragRef.current) return; setOffset(constrainedOffset({ x: dragRef.current.offset.x + event.clientX - dragRef.current.x, y: dragRef.current.offset.y + event.clientY - dragRef.current.y }, scale)); } : undefined} onPointerUp={() => { dragRef.current = null; setPanning(false); }} onPointerCancel={() => { dragRef.current = null; setPanning(false); }} onDoubleClick={index + 1 === page ? (event) => { if (Date.now() - lastTouchAtRef.current > 800) toggleZoomAt(event.clientX, event.clientY); } : undefined}>
                          <div ref={index + 1 === page ? pageContentRef : null} className={`mx-auto w-max origin-top-left ${pinching || panning || zoomPage !== page ? "" : "transition-transform duration-180 ease-out motion-reduce:transition-none"}`} style={index + 1 === zoomPage ? { transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})` } : undefined}>
                             <CachedPdfPage number={index + 1} width={displayWidth} url={urls[index + 1]} />
