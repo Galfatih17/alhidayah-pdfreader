@@ -56,7 +56,7 @@ export async function renderPageToBlob(pdf: PDFDocumentProxy, pageNumber: number
   await page.render({ canvas, canvasContext: ctx, viewport }).promise;
   page.cleanup();
   const blob = await new Promise<Blob>((resolve, reject) =>
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Render gagal"))), "image/webp", 0.92),
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Render gagal"))), "image/webp", 0.85),
   );
   canvas.width = 0;
   canvas.height = 0;
