@@ -7,12 +7,13 @@ import { pdfStorageService } from "@/services/pdfStorageService";
 import { AppHeader } from "@/components/AppHeader";
 import { BottomNavigation } from "@/components/BottomNavigation";
 import { EmptyState } from "@/components/EmptyState";
+import { LocalPdfHistory } from "@/components/LocalPdfHistory";
 import { LocalPdfPicker } from "@/components/LocalPdfPicker";
 import { PdfCard } from "@/components/PdfCard";
 import { SearchBar } from "@/components/SearchBar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { createLocalPdf, type LocalPdf } from "@/lib/localPdf";
+import { useLocalPdfActions } from "@/hooks/useLocalPdfActions";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import { listDocuments } from "@/services/pdfService";
 
@@ -42,8 +43,9 @@ export const Route = createFileRoute("/library")({
 function LibraryPage() {
   const [query, setQuery] = useState("");
   const [visible, setVisible] = useState(PAGE_SIZE);
-  const [localPdf, setLocalPdf] = useState<LocalPdf | null>(null);
   const debounced = useDebouncedValue(query, 250);
+  const { localPdf, saving, openingId, saveAndOpen, openFromHistory, closeLocal } =
+    useLocalPdfActions();
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["pdf-documents"],
@@ -80,7 +82,7 @@ function LibraryPage() {
         <PdfReader
           document={localPdf.document}
           localFile={localPdf.file}
-          onCloseLocal={() => setLocalPdf(null)}
+          onCloseLocal={closeLocal}
         />
       </Suspense>
     );
@@ -91,10 +93,11 @@ function LibraryPage() {
       <AppHeader subtitle="Semua dokumen" />
       <main className="mx-auto max-w-3xl space-y-5 px-4 py-5">
         <SearchBar value={query} onChange={setQuery} />
-        <LocalPdfPicker
-          onSelect={(file) => setLocalPdf(createLocalPdf(file))}
-          className="w-full gap-2"
-        />
+        <LocalPdfPicker onSelect={saveAndOpen} className="w-full gap-2" disabled={saving} />
+        <p className="-mt-3 text-center text-xs text-muted-foreground">
+          PDF disimpan di perangkat ini dan tidak diunggah.
+        </p>
+        <LocalPdfHistory onOpen={openFromHistory} openingId={openingId} />
         {data?.length ? (
           <Button
             variant="outline"

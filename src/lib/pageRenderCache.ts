@@ -1,5 +1,5 @@
 import type { PDFDocumentProxy } from "pdfjs-dist";
-import { META_STORE, RENDER_STORE, idbDelete, idbGet, idbPut } from "./offlineDb";
+import { META_STORE, RENDER_STORE, idbDelete, idbGet, idbKeys, idbPut } from "./offlineDb";
 
 /** Max rendered page images kept per document (LRU). */
 const LIMIT_PER_DOC = 80;
@@ -40,6 +40,21 @@ export async function putCachedPage(docId: string, page: number, width: number, 
     await touch(docId, key);
   } catch {
     /* storage full or unavailable */
+  }
+}
+
+export async function clearCachedPages(docId: string) {
+  try {
+    const prefix = `${docId}-`;
+    const keys = await idbKeys(RENDER_STORE);
+    await Promise.all(
+      keys
+        .filter((key): key is string => typeof key === "string" && key.startsWith(prefix))
+        .map((key) => idbDelete(RENDER_STORE, key)),
+    );
+    await idbDelete(META_STORE, `render-lru:${docId}`);
+  } catch {
+    /* cache cleanup is best-effort */
   }
 }
 
