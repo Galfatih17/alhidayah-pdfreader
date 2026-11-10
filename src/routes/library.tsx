@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Download, Library as LibraryIcon, Loader2 } from "lucide-react";
@@ -7,12 +7,18 @@ import { pdfStorageService } from "@/services/pdfStorageService";
 import { AppHeader } from "@/components/AppHeader";
 import { BottomNavigation } from "@/components/BottomNavigation";
 import { EmptyState } from "@/components/EmptyState";
+import { LocalPdfPicker } from "@/components/LocalPdfPicker";
 import { PdfCard } from "@/components/PdfCard";
 import { SearchBar } from "@/components/SearchBar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { createLocalPdf, type LocalPdf } from "@/lib/localPdf";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import { listDocuments } from "@/services/pdfService";
+
+const PdfReader = lazy(() =>
+  import("@/components/PdfReader").then((module) => ({ default: module.PdfReader })),
+);
 
 const PAGE_SIZE = 12;
 
@@ -36,11 +42,13 @@ export const Route = createFileRoute("/library")({
 function LibraryPage() {
   const [query, setQuery] = useState("");
   const [visible, setVisible] = useState(PAGE_SIZE);
+  const [localPdf, setLocalPdf] = useState<LocalPdf | null>(null);
   const debounced = useDebouncedValue(query, 250);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["pdf-documents"],
     queryFn: listDocuments,
+    enabled: !localPdf,
   });
 
   const [downloading, setDownloading] = useState(false);
@@ -66,11 +74,27 @@ function LibraryPage() {
   );
   const shown = filtered.slice(0, visible);
 
+  if (localPdf) {
+    return (
+      <Suspense fallback={<div className="min-h-dvh bg-reader" />}>
+        <PdfReader
+          document={localPdf.document}
+          localFile={localPdf.file}
+          onCloseLocal={() => setLocalPdf(null)}
+        />
+      </Suspense>
+    );
+  }
+
   return (
     <div className="app-shell min-h-screen">
       <AppHeader subtitle="Semua dokumen" />
       <main className="mx-auto max-w-3xl space-y-5 px-4 py-5">
         <SearchBar value={query} onChange={setQuery} />
+        <LocalPdfPicker
+          onSelect={(file) => setLocalPdf(createLocalPdf(file))}
+          className="w-full gap-2"
+        />
         {data?.length ? (
           <Button
             variant="outline"
@@ -78,7 +102,11 @@ function LibraryPage() {
             disabled={downloading}
             onClick={downloadAll}
           >
-            {downloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+            {downloading ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Download className="size-4" />
+            )}
             {downloading ? "Mengunduh semua PDF..." : "Unduh semua untuk offline"}
           </Button>
         ) : null}
