@@ -99,7 +99,12 @@ export function PdfReader({
 
   const { data: fileUrl, isLoading, isError } = useQuery({
     queryKey: ["pdf-url", doc.file_path, reloadKey],
-    queryFn: () => pdfStorageService.getPdf(doc.file_path, setProgressPercent),
+    queryFn: () =>
+      pdfStorageService.getPdf(doc.file_path, setProgressPercent, () => {
+        toast.warning(
+          "PDF dibuka online, tetapi salinan offline gagal disimpan. Periksa ruang penyimpanan browser.",
+        );
+      }),
     retry: 1,
     staleTime: Infinity,
     enabled: !localFile,
