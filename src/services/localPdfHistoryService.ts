@@ -41,8 +41,10 @@ function storageError(error: unknown): Error {
   );
 }
 
-export async function saveLocalPdf(file: File): Promise<LocalPdf> {
-  const id = `local-${crypto.randomUUID()}`;
+export async function saveLocalPdf(
+  file: File,
+  id = `local-${crypto.randomUUID()}`,
+): Promise<LocalPdf> {
   const entry: LocalPdfHistoryEntry = {
     id,
     title: file.name.replace(/\.pdf$/i, "") || file.name,
@@ -66,19 +68,26 @@ export async function saveLocalPdf(file: File): Promise<LocalPdf> {
 }
 
 export async function openLocalPdfHistory(id: string): Promise<LocalPdf> {
-  const entries = await listLocalPdfHistory();
+  const entries = await readEntries();
   const entry = entries.find((item) => item.id === id);
   if (!entry) throw new Error("PDF lokal tidak ditemukan di penyimpanan perangkat.");
 
   const stored = await idbGet<Blob>(PDF_STORE, fileKey(id));
-  if (!stored) throw new Error("Salinan PDF sudah tidak tersedia di penyimpanan browser.");
+  if (!stored) {
+    await idbPut(
+      META_STORE,
+      HISTORY_KEY,
+      entries.filter((item) => item.id !== id),
+    ).catch(() => undefined);
+    throw new Error("Salinan PDF sudah tidak tersedia di penyimpanan browser.");
+  }
 
   const file = new File([stored], entry.fileName, {
     type: stored.type || "application/pdf",
     lastModified: entry.lastModified,
   });
   const updated = { ...entry, lastOpenedAt: new Date().toISOString() };
-  await idbPut(META_STORE, HISTORY_KEY, [
+  void idbPut(META_STORE, HISTORY_KEY, [
     updated,
     ...entries.filter((item) => item.id !== id),
   ]).catch(() => undefined);
