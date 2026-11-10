@@ -5,9 +5,17 @@ export type LocalPdf = {
   file: File;
 };
 
-export function createLocalPdf(file: File): LocalPdf {
+export type LocalPdfHistoryEntry = {
+  id: string;
+  title: string;
+  fileName: string;
+  fileSize: number;
+  lastModified: number;
+  lastOpenedAt: string;
+};
+
+export function createLocalPdf(file: File, id = `local-${crypto.randomUUID()}`): LocalPdf {
   const now = new Date().toISOString();
-  const id = `local-${crypto.randomUUID()}`;
 
   return {
     file,

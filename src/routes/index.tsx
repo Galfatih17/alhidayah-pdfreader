@@ -2,10 +2,11 @@ import { lazy, Suspense, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { AppHeader } from "@/components/AppHeader";
 import { BottomNavigation } from "@/components/BottomNavigation";
+import { LocalPdfHistory } from "@/components/LocalPdfHistory";
 import { LocalPdfPicker } from "@/components/LocalPdfPicker";
 import { MainTabs } from "@/components/MainTabs";
 import { SearchBar } from "@/components/SearchBar";
-import { createLocalPdf, type LocalPdf } from "@/lib/localPdf";
+import { useLocalPdfActions } from "@/hooks/useLocalPdfActions";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
 
 const PdfReader = lazy(() =>
@@ -36,8 +37,9 @@ export const Route = createFileRoute("/")({
 
 function Index() {
   const [query, setQuery] = useState("");
-  const [localPdf, setLocalPdf] = useState<LocalPdf | null>(null);
   const debounced = useDebouncedValue(query, 250);
+  const { localPdf, saving, openingId, saveAndOpen, openFromHistory, closeLocal } =
+    useLocalPdfActions();
 
   if (localPdf) {
     return (
@@ -45,7 +47,7 @@ function Index() {
         <PdfReader
           document={localPdf.document}
           localFile={localPdf.file}
-          onCloseLocal={() => setLocalPdf(null)}
+          onCloseLocal={closeLocal}
         />
       </Suspense>
     );
@@ -55,13 +57,11 @@ function Index() {
     <div className="app-shell min-h-screen">
       <AppHeader subtitle="Lanjutkan membaca" />
       <main className="mx-auto max-w-3xl space-y-5 px-4 py-5">
-        <LocalPdfPicker
-          onSelect={(file) => setLocalPdf(createLocalPdf(file))}
-          className="h-12 w-full gap-2"
-        />
+        <LocalPdfPicker onSelect={saveAndOpen} className="h-12 w-full gap-2" disabled={saving} />
         <p className="-mt-3 text-center text-xs text-muted-foreground">
-          PDF dibuka langsung di perangkat dan tidak diunggah.
+          PDF disimpan di perangkat ini dan tidak diunggah.
         </p>
+        <LocalPdfHistory onOpen={openFromHistory} openingId={openingId} />
         <SearchBar value={query} onChange={setQuery} />
         <MainTabs query={debounced} />
       </main>
