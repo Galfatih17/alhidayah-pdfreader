@@ -15,7 +15,11 @@ const SIGNED_URL_TTL_SECONDS = 60 * 60;
  */
 export interface PdfStorageService {
   /** Resolve a URL the PDF viewer can load (remote now, local blob later). */
-  getPdf(filePath: string, onProgress?: (percent: number | null) => void): Promise<string>;
+  getPdf(
+    filePath: string,
+    onProgress?: (percent: number | null) => void,
+    onCacheFallback?: () => void,
+  ): Promise<string>;
   /** Persist the PDF for offline use. No-op in Stage 1. */
   downloadPdf(filePath: string, onProgress?: (percent: number | null) => void): Promise<void>;
   /** Remove an offline copy. No-op in Stage 1. */
@@ -29,6 +33,7 @@ export interface PdfStorageService {
 const objectUrls = new Map<string, string>();
 const inflight = new Map<string, Promise<void>>();
 const listeners = new Set<() => void>();
+const autoCacheFailures = new Set<string>();
 
 export function subscribeOffline(fn: () => void) {
   listeners.add(fn);
@@ -47,8 +52,12 @@ class OfflinePdfStorageService implements PdfStorageService {
     return data.signedUrl;
   }
 
-  /** Only return a local URL after the full file has been stored. */
-  async getPdf(filePath: string, onProgress?: (percent: number | null) => void): Promise<string> {
+  /** Prefer a local cached copy; fall back to the signed URL if caching fails. */
+  async getPdf(
+    filePath: string,
+    onProgress?: (percent: number | null) => void,
+    onCacheFallback?: () => void,
+  ): Promise<string> {
     const cached = objectUrls.get(filePath);
     if (cached) return cached;
     try {
@@ -61,12 +70,27 @@ class OfflinePdfStorageService implements PdfStorageService {
     } catch {
       /* IndexedDB unavailable */
     }
-    await this.downloadPdf(filePath, onProgress);
-    const blob = await idbGet<Blob>(PDF_STORE, filePath);
-    if (!blob) throw new Error("PDF tidak tersimpan di perangkat.");
-    const url = URL.createObjectURL(blob);
-    objectUrls.set(filePath, url);
-    return url;
+    if (autoCacheFailures.has(filePath)) {
+      onProgress?.(null);
+      const url = await this.signedUrl(filePath);
+      onCacheFallback?.();
+      return url;
+    }
+    try {
+      await this.downloadPdf(filePath, onProgress);
+      const blob = await idbGet<Blob>(PDF_STORE, filePath);
+      if (!blob) throw new Error("PDF tidak tersimpan di perangkat.");
+      const url = URL.createObjectURL(blob);
+      objectUrls.set(filePath, url);
+      return url;
+    } catch {
+      // Keep online reading available when storage is full or IndexedDB fails.
+      autoCacheFailures.add(filePath);
+      onProgress?.(null);
+      const url = await this.signedUrl(filePath);
+      onCacheFallback?.();
+      return url;
+    }
   }
 
   downloadPdf(filePath: string, onProgress?: (percent: number | null) => void): Promise<void> {
@@ -88,10 +112,11 @@ class OfflinePdfStorageService implements PdfStorageService {
         if (done) break;
         chunks.push(Uint8Array.from(value).buffer);
         received += value.byteLength;
-        onProgress?.(total ? Math.min(100, Math.round(received / total * 100)) : null);
+        onProgress?.(total ? Math.min(100, Math.round((received / total) * 100)) : null);
       }
       const blob = new Blob(chunks, { type: "application/pdf" });
       await idbPut(PDF_STORE, filePath, blob);
+      autoCacheFailures.delete(filePath);
       onProgress?.(100);
       notify();
     })().finally(() => inflight.delete(filePath));
