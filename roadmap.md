@@ -10,3 +10,4 @@
 - [x] Haluskan perpindahan halaman saat PDF diperbesar; pemeriksaan gerakan langsung menunggu dokumen tersedia di library pratinjau.
 
 - [ ] Security: tighten access rules on bookmarks, reading progress, and document info
+- [x] Siapkan konfigurasi Bubblewrap TWA, Digital Asset Links awal, workflow GitHub Actions, dan panduan sidik jari sertifikat.
