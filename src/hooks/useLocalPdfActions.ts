@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import type { LocalPdf } from "@/lib/localPdf";
+import { createLocalPdf, type LocalPdf } from "@/lib/localPdf";
 import { openLocalPdfHistory, saveLocalPdf } from "@/services/localPdfHistoryService";
 
 export function useLocalPdfActions() {
@@ -10,18 +10,30 @@ export function useLocalPdfActions() {
   const [saving, setSaving] = useState(false);
   const [openingId, setOpeningId] = useState<string | null>(null);
 
-  const saveAndOpen = async (file: File) => {
+  const saveAndOpen = (file: File) => {
     if (saving || openingId) return;
+
+    const pdf = createLocalPdf(file);
+    const toastId = `local-pdf-save-${pdf.document.id}`;
+    setLocalPdf(pdf);
     setSaving(true);
-    try {
-      const pdf = await saveLocalPdf(file);
-      setLocalPdf(pdf);
-      await queryClient.invalidateQueries({ queryKey: ["local-pdf-history"] });
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "PDF gagal disimpan di perangkat.");
-    } finally {
-      setSaving(false);
-    }
+    toast.loading("PDF dibuka. Menyimpan salinan ke riwayat...", { id: toastId });
+
+    void saveLocalPdf(file, pdf.document.id)
+      .then(() => {
+        void queryClient
+          .invalidateQueries({ queryKey: ["local-pdf-history"] })
+          .catch(() => undefined);
+        toast.success("PDF tersimpan di riwayat lokal.", { id: toastId });
+      })
+      .catch((error: unknown) => {
+        const detail = error instanceof Error ? error.message : "Penyimpanan lokal gagal.";
+        toast.error(
+          `${detail} PDF tetap terbuka untuk sesi ini, tetapi tidak tersedia di riwayat setelah ditutup.`,
+          { id: toastId },
+        );
+      })
+      .finally(() => setSaving(false));
   };
 
   const openFromHistory = async (id: string) => {
