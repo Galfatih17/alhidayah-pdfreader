@@ -1,0 +1,5 @@
+# Signing material must never be committed.
+*.keystore
+*.jks
+*.p12
+*.pem
