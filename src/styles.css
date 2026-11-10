@@ -230,6 +230,11 @@
   position: absolute;
 }
 
+/* Hide the hosting-injected Lovable badge without affecting app content. */
+#lovable-badge {
+  display: none !important;
+}
+
 .pdf-page-canvas { -webkit-overflow-scrolling: touch; scroll-behavior: auto; }
 .reader-rotated { will-change: transform; }
 .reader-rotated .reader-stage { height: 100%; }
