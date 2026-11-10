@@ -1,10 +1,16 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { AppHeader } from "@/components/AppHeader";
 import { BottomNavigation } from "@/components/BottomNavigation";
+import { LocalPdfPicker } from "@/components/LocalPdfPicker";
 import { MainTabs } from "@/components/MainTabs";
 import { SearchBar } from "@/components/SearchBar";
+import { createLocalPdf, type LocalPdf } from "@/lib/localPdf";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
+
+const PdfReader = lazy(() =>
+  import("@/components/PdfReader").then((module) => ({ default: module.PdfReader })),
+);
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -21,8 +27,8 @@ export const Route = createFileRoute("/")({
         content:
           "Baca dokumen PDF di ponsel, lanjutkan dari halaman terakhir, dan simpan bookmark halaman penting.",
       },
-       { property: "og:type", content: "website" },
-       { name: "twitter:card", content: "summary" },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: Index,
@@ -30,12 +36,32 @@ export const Route = createFileRoute("/")({
 
 function Index() {
   const [query, setQuery] = useState("");
+  const [localPdf, setLocalPdf] = useState<LocalPdf | null>(null);
   const debounced = useDebouncedValue(query, 250);
+
+  if (localPdf) {
+    return (
+      <Suspense fallback={<div className="min-h-dvh bg-reader" />}>
+        <PdfReader
+          document={localPdf.document}
+          localFile={localPdf.file}
+          onCloseLocal={() => setLocalPdf(null)}
+        />
+      </Suspense>
+    );
+  }
 
   return (
     <div className="app-shell min-h-screen">
       <AppHeader subtitle="Lanjutkan membaca" />
       <main className="mx-auto max-w-3xl space-y-5 px-4 py-5">
+        <LocalPdfPicker
+          onSelect={(file) => setLocalPdf(createLocalPdf(file))}
+          className="h-12 w-full gap-2"
+        />
+        <p className="-mt-3 text-center text-xs text-muted-foreground">
+          PDF dibuka langsung di perangkat dan tidak diunggah.
+        </p>
         <SearchBar value={query} onChange={setQuery} />
         <MainTabs query={debounced} />
       </main>

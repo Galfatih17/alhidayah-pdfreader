@@ -34,7 +34,17 @@ const CachedPdfPage = memo(function CachedPdfPage({ url, width, number }: { url:
   return <img src={url} alt={`Halaman ${number}`} width={width} style={{ width }} draggable={false} decoding="async" className="block max-w-none select-none" />;
 });
 
-export function PdfReader({ document: doc, initialPage }: { document: PdfDocument; initialPage?: number }) {
+export function PdfReader({
+  document: doc,
+  initialPage,
+  localFile,
+  onCloseLocal,
+}: {
+  document: PdfDocument;
+  initialPage?: number;
+  localFile?: File;
+  onCloseLocal?: () => void;
+}) {
   const queryClient = useQueryClient();
   const containerRef = useRef<HTMLDivElement>(null);
   const pageViewportRef = useRef<HTMLDivElement>(null);
@@ -54,7 +64,7 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
   const [progressPercent, setProgressPercent] = useState<number | null>(0);
   const [error, setError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
-  const [restored, setRestored] = useState(initialPage != null);
+  const [restored, setRestored] = useState(initialPage != null || localFile != null);
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [urls, setUrls] = useState<Record<number, string>>({});
   const urlsRef = useRef<Record<number, string>>({});
@@ -92,11 +102,12 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
     queryFn: () => pdfStorageService.getPdf(doc.file_path, setProgressPercent),
     retry: 1,
     staleTime: Infinity,
+    enabled: !localFile,
   });
   const { data: progress } = useQuery({
     queryKey: ["reading-progress", doc.id],
     queryFn: () => getProgress(doc.id),
-    enabled: initialPage == null,
+    enabled: initialPage == null && !localFile,
   });
 
   useEffect(() => {
@@ -180,21 +191,26 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
   }, []);
 
   const unsavedRef = useRef<{ currentPage: number; totalPages: number } | null>(null);
-  const flushProgress = useCallback(() => {
-    const value = unsavedRef.current;
-    if (!value) return;
-    unsavedRef.current = null;
-    saveProgress({ pdfId: doc.id, ...value })
-      .then(() => queryClient.invalidateQueries({ queryKey: ["recent-documents"] }))
-      .catch(() => { if (navigator.onLine) toast.error("Progress membaca gagal disimpan."); });
-  }, [doc.id, queryClient]);
+  const flushProgress = useCallback(
+    () => {
+      const value = unsavedRef.current;
+      if (!value || localFile) return;
+      unsavedRef.current = null;
+      saveProgress({ pdfId: doc.id, ...value })
+        .then(() => queryClient.invalidateQueries({ queryKey: ["recent-documents"] }))
+        .catch(() => {
+          if (navigator.onLine) toast.error("Progress membaca gagal disimpan.");
+        });
+    },
+    [doc.id, queryClient, localFile],
+  );
 
   useEffect(() => {
-    if (!restored || !numPages) return;
+    if (!restored || !numPages || localFile) return;
     unsavedRef.current = { currentPage: page, totalPages: numPages };
     const timer = setTimeout(flushProgress, 800);
     return () => clearTimeout(timer);
-  }, [page, numPages, restored, flushProgress]);
+  }, [page, numPages, restored, flushProgress, localFile]);
 
   // Save right away when leaving the reader or hiding the app so history is never missed.
   useEffect(() => {
@@ -208,14 +224,19 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
     };
   }, [flushProgress]);
 
-  const onLoadSuccess = useCallback((proxy: PDFDocumentProxy) => {
-    const total = proxy.numPages;
-    setPdf(proxy);
-    setNumPages(total);
-    setError(false);
-    setPage((current) => Math.min(Math.max(1, current), total));
-    if (doc.total_pages !== total) void updateTotalPages(doc.id, total).catch(() => undefined);
-  }, [doc.id, doc.total_pages]);
+  const onLoadSuccess = useCallback(
+    (proxy: PDFDocumentProxy) => {
+      const total = proxy.numPages;
+      setPdf(proxy);
+      setNumPages(total);
+      setError(false);
+      setPage((current) => Math.min(Math.max(1, current), total));
+      if (!localFile && doc.total_pages !== total) {
+        void updateTotalPages(doc.id, total).catch(() => undefined);
+      }
+    },
+    [doc.id, doc.total_pages, localFile],
+  );
 
   // Fill page images around the current page only: cache hit first, otherwise render once
   // with pdf.js and store. Far pages are released to keep memory and the DOM light.
@@ -479,24 +500,46 @@ export function PdfReader({ document: doc, initialPage }: { document: PdfDocumen
 
   return (
     <div className={`relative overflow-hidden bg-reader ${rotateFallback ? "reader-rotated" : "h-dvh"}`}>
-      <PdfToolbar pdfId={doc.id} pageNumber={page} title={doc.title} hasOutline={outline.length > 0} onOpenOutline={() => setOutlineOpen(true)} landscape={landscape} onToggleOrientation={toggleOrientation} />
+      <PdfToolbar
+        pdfId={doc.id}
+        pageNumber={page}
+        title={doc.title}
+        hasOutline={outline.length > 0}
+        onOpenOutline={() => setOutlineOpen(true)}
+        landscape={landscape}
+        onToggleOrientation={toggleOrientation}
+        isLocalDocument={localFile != null}
+        {...(onCloseLocal ? { onCloseLocal } : {})}
+      />
       <OutlineSheet open={outlineOpen} onOpenChange={setOutlineOpen} outline={outline} onSelect={goTo} />
       <div ref={containerRef} className="reader-stage mx-auto w-full overflow-hidden pt-[calc(env(safe-area-inset-top,0px)+3rem)]">
         {error || isError ? (
           <div className="flex flex-col items-center gap-3 px-6 py-16 text-center text-reader-foreground">
             <FileWarning className="size-8 opacity-70" />
             <p className="font-display text-base font-semibold">PDF tidak dapat dimuat.</p>
-            <p className="text-sm opacity-70">Periksa koneksi internet atau ruang penyimpanan, lalu coba lagi.</p>
+            <p className="text-sm opacity-70">
+              {localFile
+                ? "Pastikan file yang dipilih adalah PDF yang valid, lalu coba lagi."
+                : "Periksa koneksi internet atau ruang penyimpanan, lalu coba lagi."}
+            </p>
             <Button onClick={() => { setError(false); setReloadKey((key) => key + 1); }}>Coba Lagi</Button>
           </div>
-        ) : isLoading || !fileUrl ? (
+        ) : !localFile && (isLoading || !fileUrl) ? (
           <div className="space-y-3" role="status" aria-label="Mengunduh PDF">
             <div className="flex items-center gap-2 text-sm text-reader-foreground"><Loader2 className="size-4 animate-spin" /> {progressPercent === null ? "Mengunduh PDF..." : `Mengunduh PDF ${progressPercent}%`}</div>
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted"><div className="h-full bg-primary transition-all" style={{ width: `${progressPercent ?? 10}%` }} /></div>
             <Skeleton className="h-[65vh] w-full" />
           </div>
         ) : (
-          <Document file={fileUrl} onLoadSuccess={onLoadSuccess} onLoadError={() => setError(true)} onSourceError={() => setError(true)} loading={<Skeleton className="h-[65vh] w-full" />} error={<div />}>
+          <Document
+            key={reloadKey}
+            file={localFile ?? fileUrl ?? ""}
+            onLoadSuccess={onLoadSuccess}
+            onLoadError={() => setError(true)}
+            onSourceError={() => setError(true)}
+            loading={<Skeleton className="h-[65vh] w-full" />}
+            error={<div />}
+          >
             <div ref={emblaRef} dir={rtl ? "rtl" : "ltr"} className="h-full overflow-hidden">
               <div className="flex h-full items-start">
                  {Array.from({ length: numPages }, (_, index) => (

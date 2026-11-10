@@ -11,6 +11,8 @@ export function PdfToolbar({
   onOpenOutline,
   landscape,
   onToggleOrientation,
+  isLocalDocument = false,
+  onCloseLocal,
 }: {
   pdfId: string;
   pageNumber: number;
@@ -19,14 +21,37 @@ export function PdfToolbar({
   onOpenOutline: () => void;
   landscape: boolean;
   onToggleOrientation: () => void;
+  isLocalDocument?: boolean;
+  onCloseLocal?: () => void;
 }) {
   return (
     <header className="absolute inset-x-0 top-0 z-40 border-b border-border/40 bg-background/70 pt-[env(safe-area-inset-top,0px)] text-reader-foreground backdrop-blur-sm">
       <div className="grid h-12 grid-cols-[5.5rem_minmax(0,1fr)_5.5rem] items-center gap-2 px-1.5 sm:px-3">
         <div className="flex items-center">
-          <Button asChild variant="ghost" size="icon" className="size-10" title="Kembali ke Library">
-            <Link to="/library" aria-label="Kembali ke Library"><House className="size-5" /></Link>
-          </Button>
+          {isLocalDocument ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-10"
+              title="Tutup PDF lokal"
+              aria-label="Tutup PDF lokal"
+              onClick={onCloseLocal}
+            >
+              <House className="size-5" />
+            </Button>
+          ) : (
+            <Button
+              asChild
+              variant="ghost"
+              size="icon"
+              className="size-10"
+              title="Kembali ke Library"
+            >
+              <Link to="/library" aria-label="Kembali ke Library">
+                <House className="size-5" />
+              </Link>
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon"
@@ -39,8 +64,26 @@ export function PdfToolbar({
             <ListTree className="size-5" />
           </Button>
         </div>
-        <span className="min-w-0 truncate text-center text-xs font-medium text-muted-foreground" title={title}>{title}</span>
-        <div className="flex items-center justify-end"><Button variant="ghost" size="icon" className={`size-10 ${landscape ? "text-primary" : ""}`} onClick={onToggleOrientation} aria-pressed={landscape} aria-label={landscape ? "Ubah ke potret" : "Ubah ke lanskap"} title={landscape ? "Potret" : "Lanskap"}><RotateCw className="size-5" /></Button><BookmarkButton pdfId={pdfId} pageNumber={pageNumber} /></div>
+        <span
+          className="min-w-0 truncate text-center text-xs font-medium text-muted-foreground"
+          title={title}
+        >
+          {title}
+        </span>
+        <div className="flex items-center justify-end">
+          <Button
+            variant="ghost"
+            size="icon"
+            className={`size-10 ${landscape ? "text-primary" : ""}`}
+            onClick={onToggleOrientation}
+            aria-pressed={landscape}
+            aria-label={landscape ? "Ubah ke potret" : "Ubah ke lanskap"}
+            title={landscape ? "Potret" : "Lanskap"}
+          >
+            <RotateCw className="size-5" />
+          </Button>
+          {!isLocalDocument && <BookmarkButton pdfId={pdfId} pageNumber={pageNumber} />}
+        </div>
       </div>
     </header>
   );
